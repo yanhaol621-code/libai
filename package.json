@@ -1,0 +1,19 @@
+{
+  "name": "print-pack-ai-mixer",
+  "version": "0.1.0",
+  "description": "电商·视频混剪工作台 - 第一阶段 MVP",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node server/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "archiver": "^6.0.1",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1"
+  }
+}

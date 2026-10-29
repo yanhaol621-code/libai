@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>管理权限 - 电商·视频混剪工作台</title>
+<link rel="icon" href="/img/ip/maid-head.webp">
+<link rel="stylesheet" href="/css/style.css?v=20261028s">
+</head>
+<body>
+<div class="header">
+  <div class="logo"><img src="/img/ip/maid-head.webp" alt="">电商·视频混剪工作台</div>
+  <div class="nav">
+    <a href="/index.html">首页</a>
+    <a href="/today.html">今日数据</a>
+  </div>
+</div>
+<div class="container">
+  <div class="row wrap">
+    <div>
+      <h1 class="page-title">管理权限</h1>
+      <p class="page-sub">主账号专属。子账号默认只能看到自己名下的项目、自己今日生成的视频和自己进行中的任务；这里可以按人单独授权「可看全部视频」。职级分「专业职级 P0-P8」与「管理层 M1-M4」两条独立通道，在「团队管理」里由主账号与 M 岗分配。</p>
+    </div>
+    <div class="spacer"></div>
+    <a class="btn btn-sm" href="/team.html">团队管理</a>
+    <button class="btn btn-sm" onclick="load()">刷新</button>
+  </div>
+
+  <div class="perm-summary" id="summary"></div>
+
+  <div class="card" style="padding:0;overflow:hidden">
+    <table class="perm-table">
+      <thead>
+        <tr>
+          <th style="width:150px">角色</th>
+          <th>项目</th>
+          <th>今日新生成视频</th>
+          <th>进行中任务</th>
+          <th style="width:180px">备注</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>主账号<span class="badge" style="margin-left:6px">全部权限</span></td>
+          <td data-label="项目" class="yes">全部成员</td>
+          <td data-label="今日新生成视频" class="yes">全部成员</td>
+          <td data-label="进行中任务" class="yes">全部成员</td>
+          <td data-label="备注" class="no">团队 / 权限管理仅主账号可见</td>
+        </tr>
+        <tr>
+          <td>运营（默认）</td>
+          <td data-label="项目">仅自己</td>
+          <td data-label="今日新生成视频">仅自己</td>
+          <td data-label="进行中任务">仅自己</td>
+          <td data-label="备注" class="no">不可越权查看他人数据</td>
+        </tr>
+        <tr>
+          <td>管理岗<span class="lvl lvl-m" style="margin-left:6px">M1-M4</span></td>
+          <td data-label="项目">仅自己</td>
+          <td data-label="今日新生成视频">仅自己</td>
+          <td data-label="进行中任务">仅自己</td>
+          <td data-label="备注" class="no">可看团队概览、可分配不高于自己的职级</td>
+        </tr>
+        <tr>
+          <td>运营（已授权）</td>
+          <td data-label="项目">仅自己</td>
+          <td data-label="今日新生成视频" class="yes">全部成员（只读）</td>
+          <td data-label="进行中任务">仅自己</td>
+          <td data-label="备注" class="no">可播放 / 下载他人成品视频</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section-title">成员权限设置</div>
+  <div class="card" style="padding:6px 20px">
+    <div class="perm-list" id="perm-list">
+      <div class="empty">加载中…</div>
+    </div>
+    <div class="perm-note">
+      <span>💡</span>
+      <div>开启「可看全部视频」后，该运营在 <b>今日数据 → 今日新生成视频</b> 里能看到并下载所有成员的成品视频，但<b>不能进入他人的项目、不能修改或删除</b>；<b>进行中任务</b>与<b>项目列表</b>仍然只显示他自己的。关闭开关即时生效，无需该运营重新登录。<br>职级不改变数据权限，只用于团队识别与「谁能给谁分配职级」：主账号可调整任何人的两条通道（含自己），M 岗只能调整不高于自己的同通道职级。</div>
+    </div>
+  </div>
+</div>
+
+<div class="toast"></div>
+<script src="/js/common.js?v=20261028m"></script>
+<script>
+let DATA = null;
+
+function scopeChip(canAll){
+  return canAll
+    ? '<span class="chip ok">全部成员视频</span>'
+    : '<span class="chip">仅自己</span>';
+}
+
+function render(){
+  const rows = (DATA && DATA.rows) || [];
+  const owner = rows.find(r => r.role === 'owner');
+  const ops = rows.filter(r => r.role !== 'owner');
+  const granted = ops.filter(r => r.canViewAllVideos).length;
+  const managers = ops.filter(r => r.isManager);
+
+  document.getElementById('summary').innerHTML = `
+    <div class="card">
+      <div class="k">主账号</div>
+      <div class="v">${esc(owner ? (owner.displayName || owner.username) : '李白')}</div>
+      <div class="d">全部项目 · 全部视频 · 全部任务 · 团队与权限管理</div>
+    </div>
+    <div class="card">
+      <div class="k">子账号默认范围</div>
+      <div class="v">仅自己</div>
+      <div class="d">自己的项目、自己今日 ${DATA ? DATA.totalTodayVideos : 0} 条视频中的自己部分、自己的任务</div>
+    </div>
+    <div class="card">
+      <div class="k">已授权「可看全部视频」</div>
+      <div class="v">${granted} / ${ops.length}</div>
+      <div class="d">按人单独授权，可随时关闭</div>
+    </div>
+    <div class="card">
+      <div class="k">管理岗（M1-M4）</div>
+      <div class="v">${managers.length} 人</div>
+      <div class="d">可查看团队概览并分配不高于自己的职级</div>
+    </div>`;
+
+  const box = document.getElementById('perm-list');
+  if (!ops.length) {
+    box.innerHTML = '<div class="empty">还没有运营子账号，去 <a href="/team.html">团队管理</a> 新建一个。</div>';
+    return;
+  }
+  box.innerHTML = rows.map(r => {
+    const isOwner = r.role === 'owner';
+    const on = !!r.canViewAllVideos;
+    return `
+    <div class="perm-row ${isOwner ? 'is-self' : ''}">
+      <div class="perm-who">
+        ${avatarHtml(r)}
+        <div style="min-width:0">
+          <div class="perm-name">${esc(r.displayName || r.username)}
+            ${levelBadge(r)}
+            ${isOwner ? '<span class="badge">主账号</span>' : (r.isManager ? '<span class="badge manager">管理岗</span>' : '<span class="badge gray">运营</span>')}
+            ${r.disabled ? '<span class="badge gray">已停用</span>' : ''}
+          </div>
+          <div class="perm-account">账号 ${esc(r.account)} · 今日 ${r.todayVideoCount || 0} 条视频${r.lastLoginAt ? ' · 最近登录 ' + fmtDate(r.lastLoginAt) : ' · 从未登录'}</div>
+        </div>
+      </div>
+      <div class="perm-scope">
+        <div class="line1">${scopeChip(isOwner || on)}
+          ${isOwner ? '<span class="chip">团队管理</span><span class="chip">权限设置</span>' : ''}
+        </div>
+        <div class="line2">${isOwner
+          ? '可查看全部成员的项目与视频，拥有团队与权限管理能力'
+          : (on ? '今日视频：全部成员（只读） · 任务：仅自己 · 项目：仅自己' : '今日视频：仅自己 · 任务：仅自己 · 项目：仅自己')}</div>
+      </div>
+      <div>
+        ${isOwner
+          ? '<label class="switch"><input type="checkbox" checked disabled><span class="track"></span><span class="switch-label">不可修改（主账号）</span></label>'
+          : `<label class="switch" data-uid="${esc(r.id)}">
+               <input type="checkbox" data-uid="${esc(r.id)}" data-name="${esc(r.displayName || r.username)}" ${on ? 'checked' : ''}>
+               <span class="track"></span><span class="switch-label">可看全部视频</span>
+             </label>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function load(){
+  try { DATA = await API.get('/api/team/permissions'); }
+  catch (e) { toast('读取失败：' + e.message); return; }
+  render();
+}
+
+// 事件委托：开关变更后写入权限
+document.addEventListener('change', (ev) => {
+  const input = ev.target;
+  if (!input || input.tagName !== 'INPUT' || input.type !== 'checkbox') return;
+  if (!input.dataset || !input.dataset.uid) return;
+  togglePerm(input.dataset.uid, input.checked, input.dataset.name || '该运营', input);
+});
+
+async function togglePerm(uid, checked, name, el){
+  if (checked && !confirm(`确定让「${name}」查看全部成员的今日视频？\n\n他可以看到并下载所有人的成品视频，但不能进入他人项目、不能修改或删除。`)) {
+    el.checked = false;
+    return;
+  }
+  const label = el.closest('.switch');
+  if (label) label.classList.add('is-busy');
+  try {
+    await API.patch('/api/team/users/' + uid, { permissions: { viewAllVideos: !!checked } });
+    toast(checked ? `已授权「${name}」查看全部视频` : `已收回「${name}」的全部视频权限`);
+    await load();
+  } catch (e) {
+    toast('设置失败：' + e.message);
+    el.checked = !checked;
+  } finally {
+    if (label) label.classList.remove('is-busy');
+  }
+}
+
+bootAuth({ ownerOnly: true }).then(ok => { if (ok) load(); });</script>
+</body>
+</html>

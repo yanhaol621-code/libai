@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>团队管理 - 电商·视频混剪工作台</title>
+<link rel="icon" href="/img/ip/maid-head.webp">
+<link rel="stylesheet" href="/css/style.css?v=20261028s">
+</head>
+<body>
+<div class="header">
+  <div class="logo"><img src="/img/ip/maid-head.webp" alt="">电商·视频混剪工作台</div>
+  <div class="nav">
+    <a href="/index.html">首页</a>
+    <a href="/today.html">今日数据</a>
+  </div>
+</div>
+<div class="container">
+  <div class="row wrap">
+    <div>
+      <h1 class="page-title">团队管理</h1>
+      <p class="page-sub" id="page-sub">查看每个成员的职级与今日产出；子账号登录后只能看到自己名下的项目、自己今日生成的视频和自己进行中的任务。职级由主账号与 M 岗（管理岗）统一分配，主账号也可以调整自己的职级。</p>
+    </div>
+    <div class="spacer"></div>
+    <a class="btn btn-sm" id="btn-perms" href="/permissions.html" style="display:none">管理权限</a>
+    <button class="btn btn-sm" onclick="loadAll()">刷新</button>
+    <button class="btn btn-sm btn-primary" id="btn-create" style="display:none" onclick="openCreate()">+ 新建运营账号</button>
+  </div>
+
+  <!-- 新建账号表单（仅主账号） -->
+  <div class="card" id="create-card" style="display:none">
+    <div class="row">
+      <h2 class="page-title" style="font-size:16px;margin:0">新建运营子账号</h2>
+      <div class="spacer"></div>
+      <button class="btn btn-sm" onclick="closeCreate()">取消</button>
+    </div>
+    <div class="grid cols-3 mt">
+      <label class="field"><span>姓名 / 昵称</span><input id="nu-username" placeholder="例如：小王" maxlength="16"></label>
+      <label class="field"><span>登录账号</span><input id="nu-account" placeholder="手机号或字母数字账号"></label>
+      <label class="field"><span>初始密码</span><input id="nu-password" type="text" placeholder="至少 6 位" value="123456"></label>
+      <label class="field"><span>专业职级</span><select id="nu-level"></select></label>
+      <label class="field"><span>管理层</span><select id="nu-manage"></select></label>
+    </div>
+    <div class="row wrap">
+      <span class="muted" style="font-size:13px">账号创建后，成员自己可以设置头像、改昵称和手机号；<b>用户名与登录账号不可更改</b>，方便团队里认人。</span>
+      <div class="spacer"></div>
+      <button class="btn btn-primary" id="nu-submit" onclick="createUser()">创建账号</button>
+    </div>
+  </div>
+
+  <div class="section-title">成员概览（今日）</div>
+  <div id="member-list" class="grid cols-3"></div>
+  <div id="member-empty" class="empty" style="display:none">还没有运营账号，点右上角「新建运营账号」添加。</div>
+
+  <div id="videos-block">
+    <div class="section-title" id="videos-title">全部今日视频（主账号视角）</div>
+    <div class="card">
+      <div class="row wrap">
+        <span class="muted">按运营筛选：</span>
+        <select id="filter-user" onchange="renderVideos()" style="max-width:220px">
+          <option value="">全部成员</option>
+        </select>
+        <div class="spacer"></div>
+        <span id="video-count" class="muted"></span>
+      </div>
+      <div id="all-videos" class="v-grid mt"></div>
+    </div>
+  </div>
+  <div class="card" id="videos-locked" style="display:none">
+    <div class="muted" style="font-size:13px">「全部今日视频」需要主账号在「管理权限」里单独授权后才能查看。当前你只能看到自己名下的视频。</div>
+  </div>
+</div>
+
+<div class="toast"></div>
+<script src="/js/common.js?v=20261028m"></script>
+<script>
+let ROWS = [];
+let ALL_VIDEOS = [];
+let PRES = {};   // uid -> 在线状态
+let LEVELS = [];        // 全量目录（兼容）
+let PROF_LEVELS = [];   // 专业职级 P0-P8
+let MGMT_LEVELS = [];   // 管理层 M1-M4
+let CAN_ASSIGN = false;
+let ASSIGNABLE = [];        // 我能分配的 P 职级
+let ASSIGNABLE_MGMT = [];   // 我能分配的 M 职级
+const IS_OWNER = () => !!(window.ME && ME.role === 'owner');
+
+const LVL_NAME = (code, kind) => {
+  const l = LEVELS.find(x => x.code === code);
+  if (l) return l.name;
+  const pool = kind === 'manageLevel' ? MGMT_LEVELS : PROF_LEVELS;
+  const m = pool.find(x => x.code === code);
+  return m ? m.name : '';
+};
+
+async function loadLevels(){
+  try {
+    const d = await API.get('/api/team/levels');
+    LEVELS = d.levels || [];
+    PROF_LEVELS = d.professional || LEVELS.filter(l => l.group === 'P');
+    MGMT_LEVELS = d.management || LEVELS.filter(l => l.group === 'M');
+    CAN_ASSIGN = !!d.canAssign;
+    ASSIGNABLE = d.assignable || [];
+    ASSIGNABLE_MGMT = d.assignableManage || [];
+  } catch (e) { LEVELS = []; PROF_LEVELS = []; MGMT_LEVELS = []; }
+  document.getElementById('nu-level').innerHTML = PROF_LEVELS
+    .map(l => `<option value="${l.code}" ${l.code === 'P1' ? 'selected' : ''}>${l.code} · ${esc(l.name)}</option>`).join('');
+  const mg = document.getElementById('nu-manage');
+  if (mg) {
+    mg.innerHTML = `<option value="">无管理岗</option>` + MGMT_LEVELS
+      .map(l => {
+        const ok = IS_OWNER() || ASSIGNABLE_MGMT.indexOf(l.code) >= 0;
+        return `<option value="${l.code}" ${ok ? '' : 'disabled'}>${l.code} · ${esc(l.name)}${ok ? '' : '（超出权限）'}</option>`;
+      }).join('');
+  }
+}
+
+async function loadAll(){
+  let data;
+  try { data = await API.get('/api/team/overview'); }
+  catch(e){ toast('读取失败：' + e.message); return; }
+  ROWS = data.rows || [];
+  if (!LEVELS.length && data.levels) LEVELS = data.levels;
+  try { PRES = (await API.get('/api/presence')).users || {}; } catch (_) { PRES = {}; }
+  document.getElementById('member-empty').style.display = ROWS.filter(r => r.user.role !== 'owner').length ? 'none' : 'block';
+  renderMembers();
+
+  const canSeeVideos = IS_OWNER() || (window.ME && ME.canViewAllVideos);
+  document.getElementById('videos-block').style.display = canSeeVideos ? '' : 'none';
+  document.getElementById('videos-locked').style.display = canSeeVideos ? 'none' : '';
+  if (canSeeVideos) {
+    try { ALL_VIDEOS = (await API.get('/api/today/videos')).items || []; }
+    catch(e){ ALL_VIDEOS = []; }
+    buildUserFilter();
+    renderVideos();
+  }
+}
+
+// 能否调整该成员某条通道（level = 专业职级 / manageLevel = 管理层），与后端规则保持一致
+function levelEditable(u, kind){
+  if (!CAN_ASSIGN || !window.ME) return false;
+  const self = u.id === ME.id;
+  // 主账号的职级只有主账号本人能调（管理岗无权动）
+  if (u.role === 'owner') return self && IS_OWNER();
+  if (self) return false;
+  if (IS_OWNER()) return true;
+  const cap = kind === 'manageLevel' ? (ME.manageRank || -1) : (ME.levelRank || -1);
+  if (cap < 0) return false;                                   // 自己这条通道没有职级
+  const cur = kind === 'manageLevel' ? (u.manageRank || -1) : (u.levelRank || -1);
+  return cur <= cap;
+}
+
+// 单条通道的一行：标签 + 下拉（没权限时退化成静态文字）
+function levelRow(u, kind){
+  const isM = kind === 'manageLevel';
+  const label = isM ? '管理层' : '职级';
+  const cur = isM ? u.manageLevel : u.level;
+  const noneText = isM ? '无管理岗' : '未定级';
+  if (!levelEditable(u, kind)) {
+    const txt = cur ? `${cur} · ${LVL_NAME(cur, kind)}` : noneText;
+    return `<div class="lvl-row"><span class="lvl-label">${label}</span>` +
+      `<span class="lvl-static ${cur ? '' : 'lvl-static-none'}">${esc(txt)}</span></div>`;
+  }
+  const pool = isM ? MGMT_LEVELS : PROF_LEVELS;
+  const mine = isM ? ASSIGNABLE_MGMT : ASSIGNABLE;
+  const opts = [`<option value="" ${cur ? '' : 'selected'}>${noneText}</option>`]
+    .concat(pool.map(l => {
+      const ok = IS_OWNER() || mine.indexOf(l.code) >= 0;
+      return `<option value="${l.code}" ${l.code === cur ? 'selected' : ''} ${ok ? '' : 'disabled'}>` +
+        `${l.code} · ${esc(l.name)}${ok ? '' : '（超出权限）'}</option>`;
+    })).join('');
+  return `<div class="lvl-row"><span class="lvl-label">${label}</span>` +
+    `<select class="level-select" data-uid="${esc(u.id)}" data-kind="${kind}" data-name="${esc(u.displayName || u.username)}"` +
+    ` onchange="changeLevel(this)" title="调整${label}（保存后立即生效）">${opts}</select></div>`;
+}
+
+function levelControl(u){
+  return levelRow(u, 'level') + levelRow(u, 'manageLevel');
+}
+
+function roleBadges(u){
+  const out = [];
+  if (u.role === 'owner') out.push('<span class="badge">主账号</span>');
+  else if (u.isManager) out.push('<span class="badge manager">管理岗</span>');
+  if (!u.role || u.role !== 'owner') {
+    if (u.canViewAllVideos) out.push('<span class="badge ok">可看全部视频</span>');
+  }
+  if (u.disabled) out.push('<span class="badge gray">已停用</span>');
+  return out.join('');
+}
+
+function renderMembers(){
+  const box = document.getElementById('member-list');
+  box.innerHTML = ROWS.map(r => {
+    const u = r.user, s = r.stats || {};
+    const isOwner = u.role === 'owner';
+    const running = (r.runningItems || []).map(t =>
+      `<div class="mini-task"><span class="chip ${t.status === 'rendering' ? 'warn' : ''}">${({queued:'排队',planning:'方案',rendering:'渲染'})[t.status] || t.status}</span> ${esc(t.projectName)} · ${t.progress}%</div>`
+    ).join('');
+    const canDrill = IS_OWNER();
+    return `
+    <div class="card member ${u.disabled ? 'disabled' : ''}">
+      <div class="row">
+        <span class="member-avatar">
+          ${avatarHtml(u)}
+          <span data-presence-uid="${u.id}">${dotHtml(PRES[u.id])}</span>
+        </span>
+        <div style="min-width:0">
+          <div class="mname">${esc(u.displayName || u.username)} ${levelBadge(u)} ${roleBadges(u)}</div>
+          <div class="muted macct">账号 ${esc(u.account)}${u.phone ? ' · ' + esc(u.phone) : ''}</div>
+          <div class="member-presence"><b data-presence-text data-uid="${u.id}">${esc(presenceText(PRES[u.id]))}</b>${u.lastLoginAt ? ' · 上次登录 ' + fmtAgo(u.lastLoginAt) : ''}</div>
+        </div>
+      </div>
+      ${u.bio ? `<div class="muted" style="font-size:12px;margin-top:8px">“${esc(u.bio)}”</div>` : ''}
+      <div class="mstats">
+        <div><b>${s.todayProjects || 0}</b><span>今日新建项目</span></div>
+        <div><b>${s.todayVideos || 0}</b><span>今日生成视频</span></div>
+        <div><b>${s.todayMaterials || 0}</b><span>今日素材</span></div>
+        <div><b>${r.runningCount || 0}</b><span>进行中任务</span></div>
+      </div>
+      <div class="mtotal muted">累计：${s.projectCount || 0} 个项目 · ${s.videoCount || 0} 条视频 · ${s.materialCount || 0} 个素材</div>
+      ${running ? `<div class="mini-tasks">${running}</div>` : ''}
+      <div class="member-levels">${levelControl(u)}</div>
+      <div class="row wrap mactions">
+        ${u.id === (window.ME && ME.id) ? '' : `<a class="btn btn-sm chat-link" href="/chat.html?with=${u.id}">发消息</a>`}
+        ${canDrill ? `
+          <a class="btn btn-sm" href="/index.html?user=${u.id}">看项目</a>
+          <a class="btn btn-sm" href="/today.html?tab=videos&user=${u.id}">看今日视频</a>
+          <a class="btn btn-sm" href="/today.html?tab=tasks&user=${u.id}">看任务</a>` : '<span class="muted" style="font-size:12px">日报明细仅主账号可看</span>'}
+      </div>
+      ${(isOwner || !IS_OWNER()) ? '' : `
+      <div class="madmin">
+        <button class="btn btn-sm" onclick="resetPwd('${u.id}','${escJs(u.displayName || u.username)}')">重置密码</button>
+        <button class="btn btn-sm" onclick="toggleDisable('${u.id}', ${!u.disabled})">${u.disabled ? '启用' : '停用'}</button>
+        <button class="btn btn-sm btn-danger" onclick="removeUser('${u.id}','${escJs(u.displayName || u.username)}')">删除</button>
+      </div>`}
+    </div>`;
+  }).join('');
+}
+
+function buildUserFilter(){
+  const sel = document.getElementById('filter-user');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">全部成员</option>' + ROWS
+    .filter(r => r.user.role !== 'owner')
+    .map(r => `<option value="${r.user.id}">${esc(r.user.displayName || r.user.username)}</option>`).join('');
+  sel.value = cur || '';
+}
+
+function renderVideos(){
+  const uid = document.getElementById('filter-user').value;
+  const list = uid ? ALL_VIDEOS.filter(v => v.ownerId === uid) : ALL_VIDEOS;
+  document.getElementById('video-count').textContent = `共 ${list.length} 条`;
+  const box = document.getElementById('all-videos');
+  if (!list.length) { box.innerHTML = '<div class="empty" style="grid-column:1/-1">今天还没有生成视频</div>'; return; }
+  box.innerHTML = list.map(v => `
+    <div class="vcard">
+      <div class="vmedia">
+        <video src="${v.fileUrl}" ${v.thumbUrl ? `poster="${v.thumbUrl}"` : ''} controls preload="metadata" playsinline></video>
+      </div>
+      <div class="vbody">
+        <div class="vtitle" title="${esc(v.title || '')}">${esc(v.title || v.label || '未命名')}</div>
+        <div class="muted vmeta">${esc(v.ownerName || '未归属')} · ${esc(v.projectName)} · ${esc(v.version)} 版</div>
+        <div class="muted vmeta">${fmtDur(v.duration)} · ${fmtSize(v.size)} · ${fmtTime(v.createdAt)}</div>
+        <div class="row vactions">
+          <a class="btn btn-sm" href="${v.fileUrl}" download>下载</a>
+          <a class="btn btn-sm" href="/project.html?id=${v.projectId}&tab=results">进入项目</a>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function fmtTime(iso){
+  if (!iso) return '-';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '-';
+  return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+}
+function escJs(s){ return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+
+// ===== 账号操作 =====
+function openCreate(){ document.getElementById('create-card').style.display = 'block'; document.getElementById('nu-username').focus(); }
+function closeCreate(){ document.getElementById('create-card').style.display = 'none'; }
+
+async function createUser(){
+  const username = document.getElementById('nu-username').value.trim();
+  const account = document.getElementById('nu-account').value.trim();
+  const password = document.getElementById('nu-password').value;
+  const level = document.getElementById('nu-level').value;
+  const manageEl = document.getElementById('nu-manage');
+  const manageLevel = manageEl ? manageEl.value : '';
+  if (!username || !account || !password) { toast('请填写完整'); return; }
+  const btn = document.getElementById('nu-submit');
+  btn.disabled = true; btn.textContent = '创建中…';
+  try {
+    await API.post('/api/team/users', { username, account, password, level, manageLevel });
+    toast('账号已创建，把账号密码发给运营即可登录');
+    document.getElementById('nu-username').value = '';
+    document.getElementById('nu-account').value = '';
+    document.getElementById('nu-password').value = '123456';
+    if (manageEl) manageEl.value = '';
+    closeCreate();
+    await loadAll();
+  } catch (e) { toast('创建失败：' + e.message); }
+  btn.disabled = false; btn.textContent = '创建账号';
+}
+
+async function changeLevel(sel){
+  const uid = sel.dataset.uid;
+  const kind = sel.dataset.kind || 'level';           // level | manageLevel
+  const isM = kind === 'manageLevel';
+  const label = isM ? '管理层' : '职级';
+  const name = sel.dataset.name || '该成员';
+  const next = sel.value || null;
+  const row = ROWS.find(r => r.user.id === uid);
+  const before = row ? (isM ? row.user.manageLevel : row.user.level) : null;
+  if ((next || null) === (before || null)) return;
+  sel.disabled = true;
+  const body = {}; body[kind] = next;
+  try {
+    const r = await API.patch('/api/team/users/' + uid + '/level', body);
+    const after = r.after
+      ? `${r.after} · ${LVL_NAME(r.after, kind)}`
+      : (isM ? '无管理岗' : '未定级');
+    toast(`已把「${name}」的${label}从 ${before ? before + ' · ' + LVL_NAME(before, kind) : (isM ? '无管理岗' : '未定级')} 调整为 ${after}`);
+    // 改的是自己的：同步顶栏身份胶囊，不然还显示旧职级
+    if (uid === ME.id) {
+      try {
+        const me = await API.get('/api/auth/me');
+        const u = me.user || me;
+        ME = window.ME = u;
+        renderUserNav();
+      } catch (_) {}
+    }
+    await loadAll();
+  } catch (e) {
+    toast('调整失败：' + e.message);
+    sel.value = before || '';
+  } finally {
+    sel.disabled = false;
+  }
+}
+
+async function resetPwd(uid, name){
+  const pwd = prompt(`给「${name}」设置新密码（至少 6 位）：`, '123456');
+  if (!pwd) return;
+  try { await API.patch('/api/team/users/' + uid, { password: pwd }); toast('密码已重置为：' + pwd); }
+  catch (e) { toast('重置失败：' + e.message); }
+}
+
+async function toggleDisable(uid, disabled){
+  try { await API.patch('/api/team/users/' + uid, { disabled }); toast(disabled ? '账号已停用' : '账号已启用'); await loadAll(); }
+  catch (e) { toast('操作失败：' + e.message); }
+}
+
+async function removeUser(uid, name){
+  if (!confirm(`确定删除运营账号「${name}」？\n\n该账号名下的项目与视频不会删除，会自动转给你（主账号）。`)) return;
+  try {
+    const r = await API.del('/api/team/users/' + uid);
+    toast(`已删除，转移 ${r.movedProjects || 0} 个项目到你名下`);
+    await loadAll();
+  } catch (e) { toast('删除失败：' + e.message); }
+}
+
+// 在线状态实时刷新（只改文字与状态点，不重绘整张卡片，避免职级下拉被重置）
+document.addEventListener('rt:presence', (e) => {
+  PRES = Object.assign({}, PRES, e.detail || {});
+  document.querySelectorAll('[data-presence-text][data-uid]').forEach((el) => {
+    const p = PRES[el.getAttribute('data-uid')];
+    if (p) el.textContent = presenceText(p);
+  });
+});
+
+bootAuth().then(async ok => {
+  if (!ok) return;
+  if (!(ME.role === 'owner' || ME.canAssignLevel)) { location.replace('/index.html'); return; }
+  const isOwner = ME.role === 'owner';
+  document.getElementById('btn-create').style.display = isOwner ? '' : 'none';
+  document.getElementById('btn-perms').style.display = isOwner ? '' : 'none';
+  if (!isOwner) {
+    const mtxt = ME.manageLevel ? `管理层 ${ME.manageLevel}` : '无管理岗';
+    const ptxt = ME.level ? `专业职级 ${ME.level}` : '未定专业职级';
+    document.getElementById('page-sub').textContent =
+      `管理岗视角（${mtxt} · ${ptxt}）：可以查看团队今日产出，并给成员调整不高于自己的职级 / 管理层；新建账号、重置密码、停用删除仍由主账号操作。`;
+  }
+  await loadLevels();
+  await loadAll();
+});
+</script>
+</body>
+</html>

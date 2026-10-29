@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>新建项目 - 电商·视频混剪工作台</title>
+<link rel="icon" href="/img/ip/maid-head.webp">
+<link rel="stylesheet" href="/css/style.css?v=20261028s">
+</head>
+<body>
+<div class="header">
+  <div class="logo"><img src="/img/ip/maid-head.webp" alt="">电商·视频混剪工作台</div>
+  <div class="nav"><a href="/index.html">首页</a><a href="/today.html">今日数据</a></div>
+</div>
+<div class="container" style="max-width:920px">
+  <h1 class="page-title">新建产品项目</h1>
+  <p class="page-sub">每个产品单独建项目，系统只会在本项目内混剪，避免不同商品素材混淆。</p>
+
+  <div class="card">
+    <label class="field"><span>产品名称 *</span>
+      <input id="name" placeholder="例如：栗子打包盒 / 水果礼品包装盒 / 甘蔗标签贴纸" />
+    </label>
+    <div class="grid cols-2">
+      <label class="field"><span>产品类别</span>
+        <select id="category">
+          <option>包装盒</option><option>手提袋</option><option>标签贴纸</option>
+          <option>吊牌</option><option>礼品盒</option><option>印刷品</option>
+          <option>邀请函</option><option>其他</option>
+        </select>
+      </label>
+      <label class="field"><span>视频比例</span>
+        <select id="ratio">
+          <option value="9:16">9:16 竖屏（抖音默认）</option>
+          <option value="1:1">1:1 方形</option>
+          <option value="4:3">4:3</option>
+          <option value="16:9">16:9 横屏</option>
+          <option value="__custom__">自定义比例…</option>
+        </select>
+      </label>
+      <div class="row" id="ratioCustomWrap" style="display:none;margin:-6px 0 16px">
+        <label class="field" style="flex:1;margin:0"><span>宽（比例）</span><input id="ratioW" type="number" min="1" max="99" value="3"></label>
+        <span class="muted" style="font-weight:700;padding-top:26px">:</span>
+        <label class="field" style="flex:1;margin:0"><span>高（比例）</span><input id="ratioH" type="number" min="1" max="99" value="4"></label>
+      </div>
+      <label class="field"><span>视频时长</span>
+        <select id="duration">
+          <option value="15">15 秒</option><option value="30" selected>30 秒</option>
+          <option value="45">45 秒</option><option value="60">60 秒</option>
+          <option value="0">自定义</option>
+        </select>
+      </label>
+      <label class="field" id="durationCustomWrap" style="display:none"><span>自定义时长（秒）</span>
+        <input id="durationCustom" type="number" min="5" max="300" value="30" />
+      </label>
+      <label class="field"><span>单次生成数量</span>
+        <select id="count">
+          <option value="1">1 条</option><option value="3" selected>3 条</option>
+          <option value="5">5 条</option><option value="10">10 条</option>
+          <option value="0">自定义</option>
+        </select>
+      </label>
+      <label class="field" id="countCustomWrap" style="display:none"><span>自定义数量</span>
+        <input id="countCustom" type="number" min="1" max="30" value="3" />
+      </label>
+    </div>
+    <label class="field"><span>视频类型</span>
+      <select id="style"></select>
+    </label>
+    <div class="muted" id="style-desc" style="font-size:12px;margin:-4px 0 18px;line-height:1.6"></div>
+
+    <div class="row mt">
+      <button class="btn btn-primary" id="submitBtn" onclick="submit()">创建并进入工作台</button>
+      <button class="btn" onclick="location.href='/index.html'">取消</button>
+    </div>
+  </div>
+</div>
+<div class="toast"></div>
+<script src="/js/common.js?v=20261028m"></script>
+<script>
+bootAuth();  // 未登录直接跳登录页
+document.getElementById('duration').addEventListener('change', e=>{ document.getElementById('durationCustomWrap').style.display = e.target.value==='0'?'block':'none'; });
+document.getElementById('count').addEventListener('change', e=>{ document.getElementById('countCustomWrap').style.display = e.target.value==='0'?'block':'none'; });
+document.getElementById('ratio').addEventListener('change', e=>{ document.getElementById('ratioCustomWrap').style.display = e.target.value==='__custom__'?'flex':'none'; });
+
+// 视频类型：由后端目录驱动，按分组渲染（后端已过滤掉内部兼容模板）
+let TEMPLATES = [];
+async function loadTemplates(){
+  const sel = document.getElementById('style');
+  try { TEMPLATES = (await API.get('/api/project-templates')).templates || []; } catch(e){ TEMPLATES = []; }
+  if (!TEMPLATES.length) {
+    sel.innerHTML = ['口播介绍','成品展示'].map(n=>`<option>${n}</option>`).join('');
+    return;
+  }
+  const groups = {};
+  TEMPLATES.forEach(t => { (groups[t.group] = groups[t.group] || []).push(t); });
+  sel.innerHTML = Object.keys(groups).map(g =>
+    `<optgroup label="${g}">${groups[g].map(t=>`<option value="${t.name}">${t.name}</option>`).join('')}</optgroup>`
+  ).join('');
+  const def = TEMPLATES[0];
+  sel.value = def.name;
+  showStyleDesc();
+}
+function showStyleDesc(){
+  const sel = document.getElementById('style');
+  const t = TEMPLATES.find(x=>x.name===sel.value);
+  document.getElementById('style-desc').textContent = t ? t.desc : '';
+}
+document.getElementById('style').addEventListener('change', showStyleDesc);
+loadTemplates();
+
+async function submit(){
+  const name = document.getElementById('name').value.trim();
+  if(!name){ toast('请填写产品名称'); return; }
+  let ratio = document.getElementById('ratio').value;
+  if (ratio === '__custom__') {
+    const w = +document.getElementById('ratioW').value, h = +document.getElementById('ratioH').value;
+    if (!w || !h || w < 1 || h < 1 || w > 99 || h > 99) { toast('请填写有效的自定义比例（宽、高均为 1–99）'); return; }
+    ratio = w + ':' + h;
+  }
+  const duration = document.getElementById('duration').value==='0'
+    ? (+document.getElementById('durationCustom').value || 30)
+    : (+document.getElementById('duration').value);
+  const count = document.getElementById('count').value==='0'
+    ? (+document.getElementById('countCustom').value || 3)
+    : (+document.getElementById('count').value);
+  const body = {
+    name,
+    category: document.getElementById('category').value,
+    ratio,
+    duration, count, style: document.getElementById('style').value,
+    // 字幕/配音/品牌已从表单移除，沿用原默认：自动标题+自动卖点字幕，不加旁白，品牌留空
+    subtitle: { autoTitle: true, autoSellPoints: true, autoSpeechToText: false, autoNarration: false, aiVoiceover: false, noNarration: true },
+    brand: { name: '', suffix: '' },
+  };
+  try {
+    const p = await API.post('/api/projects', body);
+    location.href = '/project.html?id=' + p.id;
+  } catch(e){ toast(e.message); }
+}
+</script>
+</body>
+</html>

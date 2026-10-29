@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>我的资料 - 电商·视频混剪工作台</title>
+<link rel="icon" href="/img/ip/maid-head.webp">
+<link rel="stylesheet" href="/css/style.css?v=20261028s">
+</head>
+<body>
+<div class="header">
+  <div class="logo"><img src="/img/ip/maid-head.webp" alt="">电商·视频混剪工作台</div>
+  <div class="nav">
+    <a href="/index.html">首页</a>
+    <a href="/today.html">今日数据</a>
+  </div>
+</div>
+<div class="container" style="max-width:1080px">
+  <div class="row wrap">
+    <div>
+      <h1 class="page-title">我的资料</h1>
+      <p class="page-sub">头像、昵称和手机号自己维护，团队里一眼认出是谁；<b>用户名与登录账号不可更改</b>。职级分「专业职级 P0-P8」与「管理层 M1-M4」两条通道，由主账号 / 管理岗分配。</p>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn btn-sm" onclick="openPwd()">修改密码</button>
+  </div>
+
+  <div class="profile-grid">
+    <div class="card profile-id">
+      <div class="pf-avatar">
+        <span class="avatar" id="pf-avatar">·</span>
+        <label class="pf-cam" title="更换头像">
+          <input type="file" id="avatar-file" accept="image/png,image/jpeg,image/webp" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.2l1-1.6h6.6l1 1.6h1.2A2.5 2.5 0 0 1 20 8.5v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z"/>
+            <circle cx="12" cy="12.4" r="3.1"/>
+          </svg>
+        </label>
+      </div>
+      <div class="pf-name" id="pf-name">-</div>
+      <div class="pf-sub" id="pf-sub">-</div>
+      <div class="pf-rows">
+        <div><span>用户名</span><b id="pf-username">-</b><em class="lock">不可更改</em></div>
+        <div><span>登录账号</span><b id="pf-account">-</b><em class="lock">不可更改</em></div>
+        <div><span>加入时间</span><b id="pf-joined">-</b></div>
+        <div><span>最近登录</span><b id="pf-last">-</b></div>
+        <div><span>最近在线</span><b id="pf-seen">-</b></div>
+      </div>
+      <div class="pf-tip">头像建议用真人清晰照片或统一卡通形象，方便同事在团队列表里快速认人。</div>
+    </div>
+
+    <div>
+      <div class="card" style="margin-bottom:20px">
+        <div class="section-title" style="margin-top:0">编辑资料</div>
+        <div class="grid cols-2">
+          <label class="field"><span>昵称（团队内显示）</span><input id="pf-display" maxlength="16" placeholder="例如：小李"></label>
+          <label class="field"><span>手机号</span><input id="pf-phone" maxlength="20" placeholder="选填，便于同事联系"></label>
+        </div>
+        <label class="field"><span>个人签名</span><input id="pf-bio" maxlength="60" placeholder="例如：专做食品包装，日更 30 条"></label>
+        <div class="row wrap">
+          <button class="btn btn-primary" id="pf-save" onclick="saveProfile()">保存资料</button>
+          <button class="btn" id="pf-remove-avatar" onclick="removeAvatar()" style="display:none">恢复默认头像</button>
+          <span class="muted" id="pf-saved"></span>
+        </div>
+        <div class="pf-note">职级由 <b>主账号 / M 岗</b> 统一分配，普通成员自己不能修改，需要调整请找你的主管；<b>主账号</b>可在「团队管理」里调整自己的职级。用户名和登录账号是登录凭证，创建后不可更改。</div>
+      </div>
+
+      <div class="card" style="margin-bottom:20px">
+        <div class="section-title" style="margin-top:0">在线状态</div>
+        <div class="status-row">
+          <span class="dot dot-online" id="pf-dot"></span>
+          <div class="status-opts">
+            <button class="status-opt" data-status="online" onclick="pickStatus('online')"><span class="dot dot-online"></span>在线</button>
+            <button class="status-opt" data-status="busy" onclick="pickStatus('busy')"><span class="dot dot-busy"></span>忙碌</button>
+            <button class="status-opt" data-status="away" onclick="pickStatus('away')"><span class="dot dot-away"></span>离开</button>
+          </div>
+          <span class="muted" id="pf-status-text">在线</span>
+        </div>
+        <div class="muted" style="font-size:12px;margin-top:11px;line-height:1.8">
+          登录后即显示为<b>在线</b>，同事在「消息」「团队管理」里都能看到你的状态点；关闭浏览器或长时间无操作会自动转为离线，并显示「x 小时前在线」。忙碌 / 离开只是提示，不影响接收消息。
+        </div>
+        <div class="row wrap" style="margin-top:12px;gap:8px">
+          <a class="btn btn-sm btn-primary" href="/chat.html">去站内消息</a>
+          <a class="btn btn-sm" href="/chat.html?with=usr_owner" id="pf-chat-owner" style="display:none">找主账号</a>
+        </div>
+      </div>
+
+      <div class="section-title" style="margin-top:0">职级体系</div>
+      <div class="card">
+        <div class="ladder">
+          <div class="ladder-group">
+            <div class="ladder-head"><span class="lvl lvl-m">M</span>管理通道 M1-M4</div>
+            <div class="ladder-items" id="ladder-m"></div>
+          </div>
+          <div class="ladder-group">
+            <div class="ladder-head"><span class="lvl lvl-p">P</span>专业通道 P0-P8</div>
+            <div class="ladder-items" id="ladder-p"></div>
+          </div>
+        </div>
+        <div class="muted" style="font-size:12px;margin-top:14px">两条通道<b>互相独立、可以同时拥有</b>（例如「M2 兼 P7」）：管理层决定谁管谁，专业职级体现专业水平。主账号可调整任何人的两条通道（包括自己），管理岗只能调整不高于自己的同通道职级。</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal-backdrop" id="pwd-modal">
+  <div class="modal" style="max-width:430px">
+    <div class="row">
+      <div class="section-title" style="margin:0">修改密码</div>
+      <div class="spacer"></div>
+      <button class="btn btn-sm" onclick="closePwd()">关闭</button>
+    </div>
+    <label class="field" style="margin-top:16px"><span>原密码</span>
+      <input id="oldPwd" type="password" placeholder="输入当前密码" autocomplete="current-password"></label>
+    <label class="field" style="margin-top:12px"><span>新密码</span>
+      <input id="newPwd" type="password" placeholder="至少 6 位" autocomplete="new-password"></label>
+    <label class="field" style="margin-top:12px"><span>确认新密码</span>
+      <input id="newPwd2" type="password" placeholder="再输一次" autocomplete="new-password"></label>
+    <div class="row wrap" style="margin-top:16px;gap:10px">
+      <button class="btn btn-primary" id="pwd-save" onclick="changePwd()">确认修改</button>
+      <span class="muted" style="font-size:12px">忘记密码请联系主账号在「团队管理」里重置</span>
+    </div>
+  </div>
+</div>
+<div class="toast"></div>
+<script src="/js/common.js?v=20261028m"></script>
+<script>
+let LEVELS = [];
+
+function paintAvatar(){
+  if (!window.ME) return;
+  const html = ME.avatarUrl
+    ? `<span class="avatar" id="pf-avatar"><img src="${esc(ME.avatarUrl)}" alt=""></span>`
+    : `<span class="avatar" id="pf-avatar">${esc((ME.displayName || ME.username || '?').slice(0, 1))}</span>`;
+  const cur = document.getElementById('pf-avatar');
+  if (cur) cur.outerHTML = html; else document.querySelector('.pf-avatar').insertAdjacentHTML('afterbegin', html);
+  document.getElementById('pf-remove-avatar').style.display = ME.avatarUrl ? '' : 'none';
+}
+
+function paintProfile(){
+  if (!window.ME) return;
+  document.getElementById('pf-name').innerHTML =
+    `${esc(ME.displayName || ME.username)} ${levelBadge(ME, { full: true })}${ME.role === 'owner' ? '<span class="badge">主账号</span>' : (ME.canAssignLevel ? '<span class="badge manager">管理岗</span>' : '')}`;
+  const roleText = ME.role === 'owner' ? '主账号' : (ME.canAssignLevel ? '管理岗' : '运营');
+  const descs = [];
+  if (ME.manageLevel) descs.push('管理层 ' + ME.manageLevel + (ME.manageName ? ' · ' + ME.manageName : ''));
+  if (ME.level) descs.push('专业职级 ' + ME.level + (ME.levelName ? ' · ' + ME.levelName : ''));
+  document.getElementById('pf-sub').textContent = `${roleText} · ${descs.join(' / ') || '暂未定级'}`;
+  document.getElementById('pf-username').textContent = ME.username;
+  document.getElementById('pf-account').textContent = ME.account;
+  document.getElementById('pf-joined').textContent = ME.createdAt ? fmtDate(ME.createdAt) : '-';
+  document.getElementById('pf-last').textContent = ME.lastLoginAt ? fmtDate(ME.lastLoginAt) + '（' + fmtAgo(ME.lastLoginAt) + '）' : '首次登录';
+  document.getElementById('pf-seen').textContent = ME.lastSeenAt ? fmtDate(ME.lastSeenAt) + '（' + fmtAgo(ME.lastSeenAt) + '）' : '—';
+  paintStatus();
+  document.getElementById('pf-display').value = ME.displayName || ME.username || '';
+  document.getElementById('pf-phone').value = ME.phone || '';
+  document.getElementById('pf-bio').value = ME.bio || '';
+  paintAvatar();
+}
+
+function paintStatus(){
+  const st = (RT.state[ME.id] && RT.state[ME.id].status) || 'online';
+  const online = !RT.state[ME.id] || RT.state[ME.id].online;
+  const dot = document.getElementById('pf-dot');
+  if (dot) { dot.className = 'dot dot-' + (online ? st : 'offline'); dot.title = presenceText(RT.state[ME.id]); }
+  document.querySelectorAll('.status-opt').forEach((b) => {
+    b.classList.toggle('active', b.getAttribute('data-status') === st);
+  });
+  const t = document.getElementById('pf-status-text');
+  if (t) t.textContent = presenceText(RT.state[ME.id] || { online: true, status: 'online' });
+}
+
+async function pickStatus(status){
+  const s = await setMyStatus(status);
+  if (s) paintStatus();
+}
+
+function renderLadder(){
+  if (!LEVELS.length) return;
+  const item = (l) => `<div class="ladder-item ${ME && (l.code === ME.level || l.code === ME.manageLevel) ? 'is-me' : ''}">
+      <span class="lvl ${l.group === 'M' ? 'lvl-m' : 'lvl-p'}">${l.code}</span>
+      <b>${esc(l.name)}</b><i>${esc(l.desc || '')}</i></div>`;
+  document.getElementById('ladder-m').innerHTML = LEVELS.filter(l => l.group === 'M').slice().reverse().map(item).join('');
+  document.getElementById('ladder-p').innerHTML = LEVELS.filter(l => l.group === 'P').map(item).join('');
+}
+
+async function saveProfile(){
+  const displayName = document.getElementById('pf-display').value.trim();
+  const phone = document.getElementById('pf-phone').value.trim();
+  const bio = document.getElementById('pf-bio').value.trim();
+  if (!displayName) { toast('昵称不能为空'); return; }
+  const btn = document.getElementById('pf-save');
+  btn.disabled = true; btn.textContent = '保存中…';
+  try {
+    const u = await API.patch('/api/auth/profile', { displayName, phone, bio });
+    ME = u; window.ME = u;
+    paintProfile(); renderUserNav(); renderLadder();
+    document.getElementById('pf-saved').textContent = '已保存 ✓';
+    toast('资料已保存');
+  } catch (e) { toast('保存失败：' + e.message); }
+  btn.disabled = false; btn.textContent = '保存资料';
+}
+
+async function uploadAvatar(file){
+  if (!file) return;
+  if (!/^image\//i.test(file.type)) { toast('请选择图片文件（JPG / PNG / WebP）'); return; }
+  if (file.size > 8 * 1024 * 1024) { toast('图片不要超过 8MB'); return; }
+  const cam = document.querySelector('.pf-cam');
+  cam.classList.add('is-busy');
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    const r = await API.postForm('/api/auth/avatar', form);
+    ME = r.user; window.ME = ME;
+    paintAvatar(); renderUserNav();
+    toast('头像已更新');
+  } catch (e) {
+    toast('上传失败：' + e.message);
+  }
+  cam.classList.remove('is-busy');
+  document.getElementById('avatar-file').value = '';
+}
+
+async function removeAvatar(){
+  if (!confirm('恢复为默认的字母头像？')) return;
+  try {
+    const r = await API.del('/api/auth/avatar');
+    ME = r.user; window.ME = ME;
+    paintAvatar(); renderUserNav();
+    toast('已恢复默认头像');
+  } catch (e) { toast('操作失败：' + e.message); }
+}
+
+// ---------- 修改密码 ----------
+function openPwd(){
+  ['oldPwd', 'newPwd', 'newPwd2'].forEach((id) => { document.getElementById(id).value = ''; });
+  document.getElementById('pwd-modal').classList.add('show');
+  setTimeout(() => { try { document.getElementById('oldPwd').focus(); } catch (_) {} }, 60);
+}
+function closePwd(){ document.getElementById('pwd-modal').classList.remove('show'); }
+
+async function changePwd(){
+  const oldPassword = document.getElementById('oldPwd').value;
+  const newPassword = document.getElementById('newPwd').value;
+  const again = document.getElementById('newPwd2').value;
+  if (!oldPassword || !newPassword) { toast('请填写原密码和新密码'); return; }
+  if (newPassword.length < 6) { toast('新密码至少 6 位'); return; }
+  if (newPassword !== again) { toast('两次输入的新密码不一致'); return; }
+  const btn = document.getElementById('pwd-save');
+  btn.disabled = true; btn.textContent = '提交中…';
+  try {
+    await API.post('/api/auth/password', { oldPassword, newPassword });
+    closePwd();
+    toast('密码已修改，下次登录请用新密码');
+  } catch (e) {
+    toast('修改失败：' + e.message);
+  }
+  btn.disabled = false; btn.textContent = '确认修改';
+}
+
+// 点遮罩关闭、Esc 关闭
+document.getElementById('pwd-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'pwd-modal') closePwd();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closePwd();
+});
+
+document.getElementById('avatar-file').addEventListener('change', (e) => {
+  uploadAvatar(e.target.files && e.target.files[0]);
+});
+
+document.addEventListener('rt:presence', paintStatus);
+
+bootAuth().then(async ok => {
+  if (!ok) return;
+  if (ME.role !== 'owner') document.getElementById('pf-chat-owner').style.display = '';
+  try {
+    const d = await API.get('/api/team/levels');
+    LEVELS = d.levels || [];
+  } catch (_) { LEVELS = []; }
+  paintProfile();
+  renderLadder();
+});
+</script>
+</body>
+</html>

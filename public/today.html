@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>今日数据 - 电商·视频混剪工作台</title>
+<link rel="icon" href="/img/ip/maid-head.webp">
+<link rel="stylesheet" href="/css/style.css?v=20261028s">
+</head>
+<body>
+<div class="header">
+  <div class="logo"><img src="/img/ip/maid-head.webp" alt="">电商·视频混剪工作台</div>
+  <div class="nav">
+    <a href="/index.html">首页</a>
+    <a href="/today.html">今日数据</a>
+  </div>
+</div>
+<div class="container">
+  <div class="row">
+    <div>
+      <h1 class="page-title" id="page-title">今日新生成视频</h1>
+      <p class="page-sub" id="page-sub">今天（<span id="today-date">-</span>）全部项目里新渲染出来的成品视频。</p>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn btn-sm" onclick="refresh(true)">刷新</button>
+    <a class="btn btn-sm btn-primary" id="zip-btn" href="javascript:void(0)" onclick="downloadZip()">全部下载 ZIP</a>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="videos" onclick="setTab('videos')">今日新生成视频 <span class="tab-count" id="cnt-videos">0</span></div>
+    <div class="tab" data-tab="tasks" onclick="setTab('tasks')">进行中任务 <span class="tab-count" id="cnt-tasks">0</span></div>
+  </div>
+
+  <div class="tab-content active" id="tab-videos">
+    <div id="video-grid" class="v-grid"></div>
+    <div id="video-empty" class="empty" style="display:none">
+      <span id="video-empty-text">今天还没有生成视频。</span><br><br>
+      <a class="btn btn-primary btn-sm" href="/index.html">回首页选个项目开始混剪</a>
+    </div>
+  </div>
+
+  <div class="tab-content" id="tab-tasks">
+    <div id="task-list"></div>
+    <div id="task-empty" class="empty" style="display:none">当前没有进行中的任务。</div>
+  </div>
+</div>
+
+<div class="toast"></div>
+<script src="/js/common.js?v=20261028m"></script>
+<script>
+const STATUS_TEXT = { queued: '排队中', planning: '生成方案', rendering: '渲染中' };
+let curTab = (new URLSearchParams(location.search).get('tab') === 'tasks') ? 'tasks' : 'videos';
+let timer = null;
+let lastTaskSig = '';
+let todayDate = '-';
+let VIDEO_SCOPE = 'mine';   // all=全部成员 / mine=仅自己 / user=主账号指定成员
+let TASK_SCOPE = 'mine';
+// 主账号可用 ?user=<uid> 只看某个运营的数据
+const scopeUser = new URLSearchParams(location.search).get('user') || '';
+const qs = scopeUser ? ('?user=' + encodeURIComponent(scopeUser)) : '';
+
+// 「今日视频」的可见范围说明（按身份与授权动态生成）
+function videoScopeText(){
+  if (!ME) return '今天新渲染出来的成品视频。';
+  if (ME.role === 'owner') {
+    return VIDEO_SCOPE === 'user'
+      ? `该成员名下项目今天（${todayDate}）新渲染出来的成品视频。`
+      : `全部项目今天（${todayDate}）新渲染出来的成品视频。`;
+  }
+  return VIDEO_SCOPE === 'all'
+    ? `你已被授权查看全部视频：这里显示全部成员今天（${todayDate}）的成品视频，他人视频只读（可播放 / 下载）。`
+    : `只显示你自己名下项目今天（${todayDate}）新渲染出来的成品视频。`;
+}
+function taskScopeText(){
+  if (!ME) return '排队中 / 生成方案中 / 渲染中的任务，进度每 3 秒自动刷新。';
+  if (ME.role === 'owner') return TASK_SCOPE === 'user' ? '该成员排队中 / 生成方案中 / 渲染中的任务，进度每 3 秒自动刷新。' : '全站排队中 / 生成方案中 / 渲染中的任务，进度每 3 秒自动刷新。';
+  return '只显示你自己进行中的任务，进度每 3 秒自动刷新。';
+}
+// 是否可进入该项目（他人项目在授权下仅可看视频，不可进入）
+function canEnter(projectOwnerId){
+  return !!ME && (ME.role === 'owner' || projectOwnerId === ME.id);
+}
+// 是否需要显示归属人（主账号、或授权后看到别人的视频时）
+function showOwnerTag(projectOwnerId){
+  if (!ME) return false;
+  if (ME.role === 'owner') return true;
+  return !!projectOwnerId && projectOwnerId !== ME.id;
+}
+
+function setTab(name){
+  curTab = name === 'tasks' ? 'tasks' : 'videos';
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === curTab));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-' + curTab));
+  document.getElementById('page-title').textContent = curTab === 'tasks' ? '进行中任务' : '今日新生成视频';
+  document.getElementById('zip-btn').style.display = curTab === 'videos' ? '' : 'none';
+  updateSubs();
+  const u = new URL(location.href);
+  u.searchParams.set('tab', curTab);
+  history.replaceState(null, '', u);
+  refresh();
+}
+
+function updateSubs(){
+  const sub = document.getElementById('page-sub');
+  if (!sub) return;
+  const dateEl = document.getElementById('today-date');
+  if (dateEl) dateEl.textContent = todayDate;
+  sub.textContent = curTab === 'tasks' ? taskScopeText() : videoScopeText();
+}
+
+async function loadVideos(){
+  let data;
+  try { data = await API.get('/api/today/videos' + qs); } catch(e){ toast('读取失败：' + e.message); return; }
+  document.getElementById('cnt-videos').textContent = data.count;
+  todayDate = data.date;
+  VIDEO_SCOPE = data.scope || 'mine';
+  updateSubs();
+  const grid = document.getElementById('video-grid');
+  const empty = document.getElementById('video-empty');
+  document.getElementById('zip-btn').style.display = (curTab === 'videos' && data.count) ? '' : 'none';
+  if (!data.items.length) {
+    grid.innerHTML = '';
+    document.getElementById('video-empty-text').innerHTML = (ME && ME.role !== 'owner' && VIDEO_SCOPE === 'mine')
+      ? '今天你名下还没有生成视频。'
+      : '今天还没有生成视频。';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  grid.innerHTML = data.items.map(v => `
+    <div class="vcard">
+      <div class="vmedia">
+        <video src="${v.fileUrl}" ${v.thumbUrl ? `poster="${v.thumbUrl}"` : ''} controls preload="metadata" playsinline></video>
+      </div>
+      <div class="vbody">
+        <div class="vtitle" title="${esc(v.title || '')}">${esc(v.title || v.label || '未命名')}</div>
+        <div class="muted vmeta">${esc(v.projectName)} · ${esc(v.version)} 版${v.locked ? ' · 🔒已锁定' : ''}${showOwnerTag(v.ownerId) && v.ownerName ? ' · <span class="owner-tag">' + esc(v.ownerName) + '</span>' : ''}</div>
+        <div class="muted vmeta">${fmtDur(v.duration)} · ${v.width || '-'}×${v.height || '-'} · ${fmtSize(v.size)} · ${fmtTime(v.createdAt)}</div>
+        <div class="row vactions">
+          <a class="btn btn-sm" href="${v.fileUrl}" download>下载</a>
+          ${canEnter(v.ownerId) ? `<a class="btn btn-sm" href="/project.html?id=${v.projectId}&tab=results">进入项目</a>` : '<span class="chip">他人项目 · 只读</span>'}
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+async function loadTasks(){
+  let data;
+  try { data = await API.get('/api/today/tasks' + qs); } catch(e){ toast('读取失败：' + e.message); return; }
+  document.getElementById('cnt-tasks').textContent = data.count;
+  TASK_SCOPE = data.scope || 'mine';
+  updateSubs();
+  const list = document.getElementById('task-list');
+  const empty = document.getElementById('task-empty');
+  if (!data.items.length) {
+    list.innerHTML = '';
+    empty.style.display = 'block';
+  } else {
+    empty.style.display = 'none';
+    list.innerHTML = data.items.map(t => `
+      <div class="task-item">
+        <div class="row wrap">
+          <strong>${esc(t.projectName)}</strong>${showOwnerTag(t.ownerId) && t.ownerName ? '<span class="owner-tag">' + esc(t.ownerName) + '</span>' : ''}
+          <span class="badge">${esc(t.category)}</span>
+          <span class="badge gray">${esc(t.mode)}</span>
+          <div class="spacer"></div>
+          <span class="chip ${t.status === 'rendering' ? 'warn' : ''}">${STATUS_TEXT[t.status] || t.status}</span>
+        </div>
+        <div class="bar"><div style="width:${Math.max(2, Math.min(100, t.progress || 0))}%"></div></div>
+        <div class="row wrap">
+          <span class="muted">${esc(t.message || '')}</span>
+          <div class="spacer"></div>
+          <span class="muted">${t.progress || 0}% · 已完成 ${t.doneVersions} 个版本 · 开始于 ${fmtTime(t.createdAt)}</span>
+          <a class="btn btn-sm" href="/project.html?id=${t.projectId}&tab=render">进入项目</a>
+        </div>
+        ${(t.errors && t.errors.length) ? `<div class="task-err">最近错误：${esc(t.errors[t.errors.length - 1])}</div>` : ''}
+      </div>`).join('');
+  }
+  // 任务刚刚结束/新增时，让数字与提示保持同步
+  const sig = data.items.map(t => t.taskId + ':' + t.status + ':' + t.progress).join('|');
+  if (lastTaskSig && lastTaskSig !== sig && data.items.length === 0) toast('任务已结束，已无进行中的任务');
+  lastTaskSig = sig;
+}
+
+async function refresh(showToast){
+  if (curTab === 'videos') { await loadVideos(); await loadTasks(); }
+  else { await loadTasks(); await loadVideos(); }
+  if (showToast) toast('已刷新');
+}
+
+function downloadZip(){ location.href = '/api/today/videos/zip' + qs; }
+
+function fmtTime(iso){
+  if (!iso) return '-';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '-';
+  return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+}
+
+bootAuth().then(ok => {
+  if (!ok) return;
+  setTab(curTab);
+  timer = setInterval(() => { if (!document.hidden) refresh(); }, 3000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+});
+</script>
+</body>
+</html>

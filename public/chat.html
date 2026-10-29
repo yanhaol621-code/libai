@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>站内消息 - 电商·视频混剪工作台</title>
+<link rel="icon" href="/img/ip/maid-head.webp">
+<link rel="stylesheet" href="/css/style.css?v=20261028s">
+</head>
+<body>
+<div class="header">
+  <div class="logo"><img src="/img/ip/maid-head.webp" alt="">电商·视频混剪工作台</div>
+  <div class="nav">
+    <a href="/index.html">首页</a>
+    <a href="/today.html">今日数据</a>
+  </div>
+</div>
+
+<div class="container chat-container">
+  <div class="chat-shell" id="chat-shell">
+    <!-- 左：同事列表 -->
+    <aside class="chat-side card">
+      <div class="chat-side-head">
+        <div class="row">
+          <h2 class="chat-title">同事</h2>
+          <div class="spacer"></div>
+          <span class="chat-online-count" id="online-count">-</span>
+        </div>
+        <div class="chat-search">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round"><circle cx="11" cy="11" r="6.6"/><path d="m16 16 4 4"/></svg>
+          <input id="chat-search" placeholder="搜索同事昵称 / 职级" oninput="renderPeers()">
+        </div>
+        <div class="my-status">
+          <span class="dot dot-online" id="my-dot"></span>
+          <span class="my-status-label">我的状态</span>
+          <select id="my-status" onchange="changeMyStatus(this.value)">
+            <option value="online">在线</option>
+            <option value="busy">忙碌</option>
+            <option value="away">离开</option>
+          </select>
+          <span class="muted" id="my-status-text">在线</span>
+        </div>
+      </div>
+      <div class="chat-list" id="chat-list"></div>
+    </aside>
+
+    <!-- 右：消息区 -->
+    <section class="chat-main card">
+      <div class="chat-empty" id="chat-empty">
+        <div class="chat-empty-art"><img src="/img/ip/maid-head.webp" alt=""></div>
+        <div class="chat-empty-title">选一位同事开始聊天</div>
+        <div class="chat-empty-sub">支持发文字和文件（≤100MB），消息实时到达；主账号可在「聊天记录」里查看全部会话。</div>
+      </div>
+
+      <div class="chat-thread-wrap" id="thread-wrap" style="display:none">
+        <header class="chat-top">
+          <button class="chat-back" onclick="backToList()" title="返回同事列表">‹</button>
+          <span id="peer-avatar"></span>
+          <div class="chat-peer">
+            <div class="chat-peer-name" id="peer-name">-</div>
+            <div class="chat-peer-sub" id="peer-sub">-</div>
+          </div>
+          <div class="spacer"></div>
+          <span class="chat-peer-state" id="peer-state"></span>
+        </header>
+
+        <div class="chat-thread" id="chat-thread"></div>
+
+        <div class="chat-uploading" id="chat-uploading" hidden>
+          <span class="chat-spin"></span><span id="chat-uploading-text">上传中…</span>
+        </div>
+
+        <div class="chat-composer">
+          <label class="chat-attach" title="发送文件（图片 / 文档 / 视频）">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+            <input type="file" id="chat-file" hidden>
+          </label>
+          <textarea id="chat-input" rows="1" placeholder="输入消息，Enter 发送"></textarea>
+          <button class="btn btn-primary btn-sm chat-send" id="chat-send" onclick="sendText()">发送</button>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="toast"></div>
+<script src="/js/common.js?v=20261028m"></script>
+<script>
+let PEERS = [];          // [{ user, presence, unread, last }]
+let PEER = null;         // 当前会话对象
+let MSG_IDS = new Set();
+let SENDING = false;
+let LAST_PRESENCE_RENDER = 0;
+
+const $ = (id) => document.getElementById(id);
+
+// ---------- 同事列表 ----------
+async function loadPeers(opts) {
+  let d;
+  try { d = await API.get('/api/chat/users'); }
+  catch (e) {
+    if (!opts || !opts.silent) {
+      $('chat-list').innerHTML =
+        `<div class="chat-side-empty">读取失败：${esc(e.message)}<br><button class="btn btn-sm" style="margin-top:10px" onclick="loadPeers()">重新加载</button></div>`;
+    }
+    return PEERS;
+  }
+  PEERS = d.users || [];
+  RT.totalUnread = d.totalUnread || 0;
+  PEERS.forEach((p) => { RT.state[p.user.id] = p.presence; });
+  updateChatBadge();
+  renderPeers();
+  if (opts && opts.keep && PEER) {
+    const cur = PEERS.find((p) => p.user.id === PEER.user.id);
+    if (cur) paintPeerHeader(cur);
+  }
+  return PEERS;
+}
+
+function matchPeer(p, q) {
+  if (!q) return true;
+  const u = p.user;
+  const hay = [u.displayName, u.username, u.account, u.level, u.levelName, u.manageLevel, u.manageName, u.phone].join(' ').toLowerCase();
+  return hay.indexOf(q.toLowerCase()) >= 0;
+}
+
+function renderPeers() {
+  const q = ($('chat-search').value || '').trim();
+  const list = PEERS.filter((p) => matchPeer(p, q));
+  const online = PEERS.filter((p) => p.presence && p.presence.online).length;
+  $('online-count').textContent = `同事 ${PEERS.length} 人 · ${online} 人在线`;
+
+  const box = $('chat-list');
+  if (!PEERS.length) {
+    box.innerHTML = '<div class="chat-side-empty">还没有其他同事，主账号在「团队管理」里新建账号后就能聊天了。</div>';
+    return;
+  }
+  if (!list.length) {
+    box.innerHTML = '<div class="chat-side-empty">没有匹配的同事</div>';
+    return;
+  }
+  box.innerHTML = list.map((p) => {
+    const u = p.user;
+    const active = PEER && PEER.user.id === u.id;
+    const last = p.last;
+    const preview = last
+      ? (last.from === ME.id ? '我：' : '') + (last.file && !last.text ? '[文件] ' + last.file.name : (last.text || (last.file ? '[文件]' : '')))
+      : (u.bio || `账号 ${u.account}`);
+    const time = last ? shortTime(last.at) : '';
+    return `
+      <button class="peer ${active ? 'active' : ''} ${u.disabled ? 'disabled' : ''}" onclick="openPeer('${u.id}')">
+        <span class="peer-avatar">
+          ${avatarHtml(u, 'avatar-md')}
+          <span data-presence-uid="${u.id}">${dotHtml(p.presence)}</span>
+        </span>
+        <span class="peer-body">
+          <span class="peer-line1">
+            <b>${esc(u.displayName || u.username)}</b>
+            ${levelBadge(u)}
+            ${u.role === 'owner' ? '<span class="badge">主账号</span>' : ''}
+            ${u.disabled ? '<span class="badge gray">已停用</span>' : ''}
+            <span class="peer-time">${esc(time)}</span>
+          </span>
+          <span class="peer-line2">
+            <span class="peer-preview">${esc(preview)}</span>
+            ${p.unread ? `<span class="peer-unread">${p.unread > 99 ? '99+' : p.unread}</span>` : ''}
+          </span>
+          <span class="peer-line3 muted" data-presence-text>${esc(presenceText(p.presence))}</span>
+        </span>
+      </button>`;
+  }).join('');
+}
+
+// ---------- 打开会话 ----------
+async function openPeer(uid) {
+  const peer = PEERS.find((p) => p.user.id === uid);
+  if (!peer) return;
+  PEER = peer;
+  PEER.unread = 0;
+  RT.viewingPeer = uid;      // 正在看这个人的会话：他的消息不再触发标签闪动
+  stopNotify();              // 已经点开看了，停掉闪动并还原标题
+  MSG_IDS = new Set();
+  $('chat-shell').classList.add('chatting');
+  $('chat-empty').style.display = 'none';
+  $('thread-wrap').style.display = 'flex';
+  paintPeerHeader(peer);
+  $('chat-thread').innerHTML = '<div class="chat-loading">加载中…</div>';
+  renderPeers();
+
+  let d;
+  try { d = await API.get('/api/chat/messages?with=' + encodeURIComponent(uid)); }
+  catch (e) { $('chat-thread').innerHTML = `<div class="chat-loading">读取失败：${esc(e.message)}</div>`; return; }
+  if (!PEER || PEER.user.id !== uid) return;
+  PEER.presence = d.presence || PEER.presence;
+  paintPeerHeader(PEER);
+  renderThread(d.messages || []);
+  scrollBottom();
+  markRead(uid);
+}
+
+function paintPeerHeader(peer) {
+  const u = peer.user;
+  $('peer-avatar').innerHTML = avatarHtml(u, 'avatar-md');
+  $('peer-name').innerHTML = `${esc(u.displayName || u.username)} ${levelBadge(u)}`;
+  const roleText = u.role === 'owner' ? '主账号' : (u.isManager ? '管理岗' : '运营');
+  const bits = [roleText];
+  if (u.phone) bits.push(u.phone);
+  bits.push(u.lastLoginAt ? '上次登录 ' + fmtAgo(u.lastLoginAt) : '从未登录');
+  $('peer-sub').textContent = bits.join(' · ');
+  $('peer-state').innerHTML = dotHtml(peer.presence) + '<span>' + esc(presenceText(peer.presence)) + '</span>';
+}
+
+function backToList() {
+  $('chat-shell').classList.remove('chatting');
+  PEER = null;
+  RT.viewingPeer = null;
+  $('thread-wrap').style.display = 'none';
+  $('chat-empty').style.display = '';
+  renderPeers();
+}
+
+// ---------- 消息渲染 ----------
+function dayKey(iso) {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+function dayLabel(iso) {
+  const d = new Date(iso);
+  const now = new Date();
+  const same = dayKey(iso) === dayKey(now.toISOString());
+  if (same) return '今天';
+  const y = new Date(now.getTime() - 86400000);
+  if (dayKey(iso) === dayKey(y.toISOString())) return '昨天';
+  return `${d.getMonth() + 1}月${d.getDate()}日`;
+}
+function shortTime(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const now = new Date();
+  if (dayKey(iso) === dayKey(now.toISOString())) {
+    return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+  }
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+function hhmm(iso) {
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? '' : d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+}
+
+function fileIcon(name, mime) {
+  const ext = (String(name).split('.').pop() || '').toLowerCase();
+  if (/^image\//.test(mime || '') || ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext)) return '图片';
+  if (/^(video|audio)\//.test(mime || '') || ['mp4', 'mov', 'mp3', 'wav'].includes(ext)) return '媒体';
+  if (['xlsx', 'xls', 'csv'].includes(ext)) return '表格';
+  if (['doc', 'docx', 'pdf', 'txt'].includes(ext)) return '文档';
+  if (['zip', 'rar', '7z'].includes(ext)) return '压缩包';
+  return '文件';
+}
+
+function messageHtml(m) {
+  const mine = m.from === ME.id;
+  const f = m.file;
+  const isImg = f && (/^image\//.test(f.mime || '') || /\.(png|jpe?g|webp|gif)$/i.test(f.name || ''));
+  const fileUrl = f ? `/api/chat/files/${f.id}` : '';
+  const fileBlock = f ? `
+    <a class="msg-file" href="${fileUrl}" target="_blank" rel="noopener">
+      ${isImg ? `<img class="msg-file-img" src="${fileUrl}?inline=1" alt="${esc(f.name)}" loading="lazy">` : ''}
+      <span class="msg-file-row">
+        <span class="msg-file-ico">${fileIcon(f.name, f.mime)}</span>
+        <span class="msg-file-meta">
+          <b title="${esc(f.name)}">${esc(f.name)}</b>
+          <i>${fmtSize(f.size)}</i>
+        </span>
+        <span class="msg-file-dl">下载</span>
+      </span>
+    </a>` : '';
+  return `
+    <div class="msg ${mine ? 'mine' : 'theirs'}" data-id="${m.id}">
+      ${mine ? '' : `<span class="msg-avatar">${avatarHtml(PEER ? PEER.user : { username: '?' }, 'avatar-sm')}</span>`}
+      <div class="msg-body">
+        <div class="bubble">
+          ${m.text ? `<div class="msg-text">${esc(m.text).replace(/\n/g, '<br>')}</div>` : ''}
+          ${fileBlock}
+        </div>
+        <div class="msg-time">${hhmm(m.at)}</div>
+      </div>
+    </div>`;
+}
+
+let THREAD_DAY = '';
+function renderThread(messages) {
+  const box = $('chat-thread');
+  THREAD_DAY = '';
+  if (!messages.length) {
+    box.innerHTML = '<div class="chat-loading">还没有聊天记录，发条消息打个招呼吧。</div>';
+    MSG_IDS = new Set();
+    return;
+  }
+  let html = '';
+  for (const m of messages) {
+    const k = dayKey(m.at);
+    if (k !== THREAD_DAY) { html += `<div class="chat-day">${dayLabel(m.at)}</div>`; THREAD_DAY = k; }
+    html += messageHtml(m);
+    MSG_IDS.add(m.id);
+  }
+  box.innerHTML = html;
+}
+function appendMessage(m) {
+  if (MSG_IDS.has(m.id)) return;
+  const box = $('chat-thread');
+  if (box.querySelector('.chat-loading')) box.innerHTML = '';
+  const k = dayKey(m.at);
+  if (k !== THREAD_DAY) {
+    box.insertAdjacentHTML('beforeend', `<div class="chat-day">${dayLabel(m.at)}</div>`);
+    THREAD_DAY = k;
+  }
+  box.insertAdjacentHTML('beforeend', messageHtml(m));
+  MSG_IDS.add(m.id);
+  scrollBottom();
+}
+function scrollBottom() {
+  const box = $('chat-thread');
+  box.scrollTop = box.scrollHeight;
+}
+
+// ---------- 发送 ----------
+async function markRead(uid) {
+  try {
+    const r = await API.post('/api/chat/read', { peer: uid });
+    RT.totalUnread = r.totalUnread || 0;
+    updateChatBadge();
+    const p = PEERS.find((x) => x.user.id === uid);
+    if (p) { p.unread = 0; renderPeers(); }
+  } catch (_) {}
+}
+
+async function sendText() {
+  if (!PEER || SENDING) return;
+  const input = $('chat-input');
+  const text = (input.value || '').trim();
+  if (!text) return;
+  SENDING = true;
+  $('chat-send').disabled = true;
+  try {
+    const r = await API.post('/api/chat/messages', { to: PEER.user.id, text });
+    input.value = '';
+    autoGrow(input);
+    appendMessage(r.message);
+    bumpPeerPreview(r.message);
+  } catch (e) { toast('发送失败：' + e.message); }
+  SENDING = false;
+  $('chat-send').disabled = false;
+  input.focus();
+}
+
+async function uploadFile(file) {
+  if (!file || !PEER) return;
+  if (file.size > 100 * 1024 * 1024) { toast('附件不要超过 100MB'); return; }
+  const wrap = $('chat-uploading');
+  $('chat-uploading-text').textContent = `正在发送 ${file.name}（${fmtSize(file.size)}）…`;
+  wrap.hidden = false;
+  const form = new FormData();
+  form.append('file', file);
+  form.append('to', PEER.user.id);
+  const text = ($('chat-input').value || '').trim();
+  if (text) form.append('text', text);
+  try {
+    const r = await API.postForm('/api/chat/upload', form);
+    $('chat-input').value = '';
+    autoGrow($('chat-input'));
+    appendMessage(r.message);
+    bumpPeerPreview(r.message);
+  } catch (e) { toast('发送失败：' + e.message); }
+  wrap.hidden = true;
+  $('chat-file').value = '';
+}
+
+function bumpPeerPreview(m) {
+  const p = PEERS.find((x) => x.user.id === PEER.user.id);
+  if (p) { p.last = m; }
+  renderPeers();
+}
+
+// ---------- 实时事件 ----------
+document.addEventListener('rt:chat', (e) => {
+  const m = e.detail;
+  if (!m) return;
+  const other = m.from === ME.id ? m.to : m.from;
+  if (PEER && other === PEER.user.id) {
+    appendMessage(m);
+    if (m.from !== ME.id) {
+      markRead(PEER.user.id);
+      const p = PEERS.find((x) => x.user.id === PEER.user.id);
+      if (p) p.presence = Object.assign({}, p.presence, { online: true });
+    }
+  } else if (m.from !== ME.id) {
+    const p = PEERS.find((x) => x.user.id === m.from);
+    if (p) { p.unread = (p.unread || 0) + 1; }
+  }
+  loadPeers({ keep: true });
+});
+
+document.addEventListener('rt:presence', () => {
+  const now = Date.now();
+  if (now - LAST_PRESENCE_RENDER < 800) return;
+  LAST_PRESENCE_RENDER = now;
+  PEERS.forEach((p) => {
+    const s = RT.state[p.user.id];
+    if (s) p.presence = s;
+  });
+  if (PEER) {
+    const s = RT.state[PEER.user.id];
+    if (s) { PEER.presence = s; paintPeerHeader(PEER); }
+  }
+  renderPeers();
+});
+
+// ---------- 交互细节 ----------
+function autoGrow(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(120, el.scrollHeight) + 'px';
+}
+
+$('chat-input').addEventListener('input', (e) => autoGrow(e.target));
+$('chat-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+    e.preventDefault();
+    sendText();
+  }
+});
+$('chat-file').addEventListener('change', (e) => {
+  const f = e.target.files && e.target.files[0];
+  if (f) uploadFile(f);
+});
+
+async function changeMyStatus(v) {
+  const s = await setMyStatus(v);
+  const dot = $('my-dot');
+  if (dot && s) { dot.className = 'dot dot-' + (s.online ? s.status : 'online'); dot.title = presenceText(s); }
+  if (s && s.online) $('my-status-text').textContent = presenceText(s);
+}
+
+// 拖拽发文件
+const shell = $('chat-shell');
+['dragover', 'drop'].forEach((ev) => shell.addEventListener(ev, (e) => {
+  if (!PEER) return;
+  e.preventDefault();
+  if (ev === 'drop') {
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) uploadFile(f);
+  }
+}));
+
+// ---------- 启动 ----------
+bootAuth().then(async (ok) => {
+  if (!ok) return;
+  await loadPeers();
+  // 从 URL 进入指定会话：?with=<uid>
+  const withUid = new URLSearchParams(location.search).get('with');
+  if (withUid && PEERS.some((p) => p.user.id === withUid)) openPeer(withUid);
+  else if (window.innerWidth > 860 && PEERS.length) {
+    // 桌面端默认打开第一个有未读或最近聊过的会话
+    const first = PEERS.find((p) => p.unread) || PEERS.find((p) => p.last) || PEERS[0];
+    if (first) openPeer(first.user.id);
+  }
+  const me = RT.state[ME.id] || { online: true, status: 'online' };
+  $('my-status').value = me.status === 'offline' ? 'online' : me.status;
+  $('my-status-text').textContent = presenceText(me);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+# ===== 依赖 =====
+node_modules/
+__pycache__/
+
+# ===== 用户数据（项目/成片/音乐库，含敏感与大文件，不入库）=====
+data/
+
+# ===== AI 模型权重（4.7G，部署时从 HuggingFace/ModelScope 下载）=====
+models/
+
+# ===== 敏感配置 =====
+.env
+
+# ===== 日志 / 临时 =====
+*.log
+logs/
+tmp*/
+tmp_*.log
+
+# ===== 本地项目记忆（WorkBuddy，含个人笔记，不入库）=====
+.workbuddy/
+
+# ===== 系统杂项 =====
+.DS_Store
+Thumbs.db
+*.url
+
+# ===== 二进制运行时：ffmpeg / cloudflared / 依赖 dll 不入库（部署时放入 bin/）=====
+bin/*.exe
+bin/*.dll
+# 但保留启动 / 隧道脚本
+!bin/start-tunnel.bat
+!bin/*.sh
+# 字幕字体(微软雅黑为商业版权,不随仓库分发)部署时自行放入 bin/fonts/
+bin/fonts/*.ttc
+bin/fonts/*.ttf
+
+# ===== 测试用大样本（视频等，脚本本身保留）=====
+test/**/*.mp4
+test/**/*.mov
+test/**/*.mkv
+test/**/*.avi
+# 测试产物（运行生成的图像等，非源码）
+test/out_asr/

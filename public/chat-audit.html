@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>聊天记录 - 电商·视频混剪工作台</title>
+<link rel="icon" href="/img/ip/maid-head.webp">
+<link rel="stylesheet" href="/css/style.css?v=20261028s">
+</head>
+<body>
+<div class="header">
+  <div class="logo"><img src="/img/ip/maid-head.webp" alt="">电商·视频混剪工作台</div>
+  <div class="nav">
+    <a href="/index.html">首页</a>
+    <a href="/today.html">今日数据</a>
+  </div>
+</div>
+
+<div class="container" style="max-width:1200px">
+  <div class="row wrap">
+    <div>
+      <h1 class="page-title">聊天记录</h1>
+      <p class="page-sub">主账号专属。这里能看到团队全部站内会话（谁和谁、什么时候、发了什么、带了哪些文件），用于工作留痕与交接核对；子账号看不到本页，也调不通对应接口。</p>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn btn-sm" onclick="loadAll()">刷新</button>
+  </div>
+
+  <div class="audit-summary" id="audit-summary"></div>
+
+  <div class="audit-grid">
+    <div class="card audit-list-card">
+      <div class="chat-search" style="margin-bottom:10px">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round"><circle cx="11" cy="11" r="6.6"/><path d="m16 16 4 4"/></svg>
+        <input id="audit-search" placeholder="搜索成员昵称" oninput="renderRows()">
+      </div>
+      <div class="audit-list" id="audit-list"></div>
+    </div>
+
+    <div class="card audit-thread-card" id="audit-thread-card">
+      <div class="chat-empty" id="audit-empty">
+        <div class="chat-empty-art"><img src="/img/ip/maid-head.webp" alt=""></div>
+        <div class="chat-empty-title">选一段会话查看记录</div>
+        <div class="chat-empty-sub">左侧按最近消息时间排序，点开即可看到完整对话与附件。</div>
+      </div>
+      <div class="audit-thread-wrap" id="audit-thread-wrap" style="display:none">
+        <div class="audit-thread-head">
+          <div>
+            <div class="audit-thread-title" id="audit-thread-title">-</div>
+            <div class="muted" id="audit-thread-sub">-</div>
+          </div>
+          <div class="spacer"></div>
+          <a class="btn btn-sm" id="audit-download" href="#" target="_blank" style="display:none">导出为文本</a>
+        </div>
+        <div class="audit-thread" id="audit-thread"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast"></div>
+<script src="/js/common.js?v=20261028m"></script>
+<script>
+let ROWS = [];
+let USERS = {};
+let UNREAD = {};
+let CUR = null;   // 当前会话 { key, a, b }
+
+const $ = (id) => document.getElementById(id);
+
+let LOAD_TRIED = false;
+async function loadAll(retry) {
+  let d;
+  try { d = await API.get('/api/chat/audit'); }
+  catch (e) {
+    // 首次失败自动重试一次，仍失败就在列表里给出可点的重试入口，避免空白页
+    if (!retry) { setTimeout(() => loadAll(true), 1000); return; }
+    if (!LOAD_TRIED) toast('读取失败：' + e.message);
+    LOAD_TRIED = true;
+    $('audit-list').innerHTML =
+      `<div class="chat-side-empty">读取失败：${esc(e.message)}<br><button class="btn btn-sm" style="margin-top:10px" onclick="loadAll()">重新加载</button></div>`;
+    return;
+  }
+  LOAD_TRIED = false;
+  ROWS = d.rows || [];
+  USERS = d.users || {};
+  UNREAD = d.unread || {};
+  renderSummary(d.stats || {});
+  renderRows();
+}
+
+function renderSummary(st) {
+  const box = $('audit-summary');
+  const cards = [
+    { k: '会话数', v: ROWS.length, d: '有消息往来的两人组合' },
+    { k: '消息总数', v: st.messages || 0, d: '全团队累计' },
+    { k: '文件消息', v: st.files || 0, d: '含附件的消息条数' },
+    { k: '参与成员', v: st.participants || 0, d: '发过或收过消息的账号' },
+  ];
+  box.innerHTML = cards.map((c) => `
+    <div class="card audit-kpi">
+      <div class="k">${c.k}</div>
+      <div class="v">${c.v}</div>
+      <div class="d">${c.d}</div>
+    </div>`).join('');
+}
+
+function nameOf(id) {
+  const u = USERS[id];
+  return u ? (u.displayName || u.username) : '已删除账号';
+}
+
+function renderRows() {
+  const q = ($('audit-search').value || '').trim().toLowerCase();
+  const rows = ROWS.filter((r) => {
+    if (!q) return true;
+    return (nameOf(r.a.id) + ' ' + nameOf(r.b.id)).toLowerCase().indexOf(q) >= 0;
+  });
+  const box = $('audit-list');
+  if (!rows.length) {
+    box.innerHTML = `<div class="chat-side-empty">${ROWS.length ? '没有匹配的会话' : '还没有任何聊天记录'}</div>`;
+    return;
+  }
+  box.innerHTML = rows.map((r) => `
+    <button class="audit-row ${CUR && CUR.key === r.key ? 'active' : ''}" onclick="openConv('${r.a.id}','${r.b.id}')">
+      <span class="audit-pair">
+        ${avatarHtml(USERS[r.a.id] || { username: '?' }, 'avatar-sm')}
+        ${avatarHtml(USERS[r.b.id] || { username: '?' }, 'avatar-sm')}
+      </span>
+      <span class="audit-row-body">
+        <span class="audit-row-names">
+          <b>${esc(nameOf(r.a.id))}</b><i>↔</i><b>${esc(nameOf(r.b.id))}</b>
+          ${UNREAD[r.b.id] || UNREAD[r.a.id] ? '<span class="badge warn">有未读</span>' : ''}
+        </span>
+        <span class="audit-row-preview">${esc(r.preview || '（无文字内容）')}</span>
+        <span class="audit-row-meta muted">${r.count} 条${r.files ? ' · ' + r.files + ' 个文件' : ''} · ${fmtAgo(r.lastAt)}</span>
+      </span>
+    </button>`).join('');
+}
+
+async function openConv(a, b) {
+  CUR = { key: [a, b].sort().join('|'), a, b };
+  renderRows();
+  $('audit-empty').style.display = 'none';
+  $('audit-thread-wrap').style.display = 'flex';
+  $('audit-thread').innerHTML = '<div class="chat-loading">加载中…</div>';
+  let d;
+  try { d = await API.get(`/api/chat/audit/messages?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}&limit=300`); }
+  catch (e) { $('audit-thread').innerHTML = `<div class="chat-loading">读取失败：${esc(e.message)}</div>`; return; }
+  const ua = d.a, ub = d.b;
+  $('audit-thread-title').innerHTML = `${esc(ua.displayName || ua.username)} <i class="audit-vs">↔</i> ${esc(ub.displayName || ub.username)}`;
+  const pa = d.presence && d.presence[a], pb = d.presence && d.presence[b];
+  $('audit-thread-sub').textContent =
+    `${levelText(ua)} · ${presenceText(pa)}　|　${levelText(ub)} · ${presenceText(pb)}　|　共 ${d.messages.length} 条`;
+  const link = $('audit-download');
+  link.href = '/api/chat/audit/export?a=' + encodeURIComponent(a) + '&b=' + encodeURIComponent(b);
+  link.style.display = '';
+
+  const box = $('audit-thread');
+  if (!d.messages.length) {
+    box.innerHTML = '<div class="chat-loading">这段会话没有消息</div>';
+    return;
+  }
+  const map = {}; map[ua.id] = ua; map[ub.id] = ub;
+  let html = '';
+  let day = '';
+  for (const m of d.messages) {
+    const k = dayKey(m.at);
+    if (k !== day) { html += `<div class="chat-day">${dayLabel(m.at)}</div>`; day = k; }
+    const from = map[m.from] || { username: '?' };
+    const mineSide = m.from === a;
+    html += `
+      <div class="audit-msg ${mineSide ? 'left' : 'right'}">
+        <span class="audit-msg-avatar">${avatarHtml(from, 'avatar-sm')}</span>
+        <div class="audit-msg-body">
+          <div class="audit-msg-name">${esc(from.displayName || from.username)}${levelBadges(from)} · ${hhmm(m.at)}${m.readAt ? '' : ' · <span class="audit-unread">未读</span>'}</div>
+          <div class="audit-bubble">
+            ${m.text ? `<div>${esc(m.text).replace(/\n/g, '<br>')}</div>` : ''}
+            ${m.file ? `<a class="msg-file" href="/api/chat/files/${m.file.id}" target="_blank" rel="noopener">
+                <span class="msg-file-row"><span class="msg-file-ico">${fileIcon(m.file.name, m.file.mime)}</span>
+                <span class="msg-file-meta"><b>${esc(m.file.name)}</b><i>${fmtSize(m.file.size)}</i></span>
+                <span class="msg-file-dl">下载</span></span></a>` : ''}
+          </div>
+        </div>
+      </div>`;
+  }
+  box.innerHTML = html;
+  box.scrollTop = 0;
+}
+
+function dayKey(iso) { const d = new Date(iso); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; }
+function dayLabel(iso) {
+  const d = new Date(iso), now = new Date();
+  if (dayKey(iso) === dayKey(now.toISOString())) return '今天';
+  const y = new Date(now.getTime() - 86400000);
+  if (dayKey(iso) === dayKey(y.toISOString())) return '昨天';
+  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+}
+function hhmm(iso) {
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? '' : d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+function fileIcon(name, mime) {
+  const ext = String(name || '').split('.').pop().toLowerCase();
+  if (/^image\//.test(mime || '') || ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext)) return '图片';
+  if (/^(video|audio)\//.test(mime || '') || ['mp4', 'mov', 'mp3'].includes(ext)) return '媒体';
+  if (['xlsx', 'xls', 'csv'].includes(ext)) return '表格';
+  if (['doc', 'docx', 'pdf', 'txt'].includes(ext)) return '文档';
+  return '文件';
+}
+
+// 实时：新消息时刷新列表（主账号在页面上时即时看到）
+document.addEventListener('rt:chat', () => { loadAll(); });
+
+bootAuth({ ownerOnly: true }).then((ok) => {
+  if (!ok) return;
+  loadAll();
+});
+</script>
+</body>
+</html>

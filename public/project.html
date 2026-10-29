@@ -1,0 +1,2994 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>项目工作台 - 电商·视频混剪工作台</title>
+<link rel="icon" href="/img/ip/maid-head.webp">
+<link rel="stylesheet" href="/css/style.css?v=20261029b">
+</head>
+<body>
+<div class="header">
+  <div class="logo"><img src="/img/ip/maid-head.webp" alt=""><span id="proj-name">项目</span></div>
+  <div class="nav">
+    <a href="/index.html">首页</a>
+    <a href="/today.html">今日数据</a>
+    <a href="#" onclick="if(confirm('确定删除该项目及其所有素材与视频？')) delProject()">删除项目</a>
+  </div>
+</div>
+<div class="container">
+  <div class="card proj-head">
+    <div class="proj-head-top">
+      <div>
+        <div class="proj-kicker">产品项目</div>
+        <h1 class="proj-title" id="proj-title">加载中…</h1>
+      </div>
+      <div class="spacer"></div>
+      <a class="btn btn-sm" href="/index.html">← 返回首页</a>
+    </div>
+    <div class="proj-facts" id="proj-meta"></div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="upload">① 素材上传</div>
+    <div class="tab" data-tab="inspect">② 一次修改</div>
+    <div class="tab" data-tab="beauty">③ 一键美颜（可选）</div>
+    <div class="tab" data-tab="asr">④ 字幕识别</div>
+    <div class="tab" data-tab="render">⑤ 自动混剪</div>
+    <div class="tab" data-tab="results">⑥ 视频结果</div>
+    <div class="tab" data-tab="library">素材库</div>
+  </div>
+
+  <!-- 上传 -->
+  <div class="tab-content active" id="tab-upload">
+    <div class="card">
+      <div class="dropzone" id="dropzone">
+        <p><strong>把整个文件夹或选中多个文件拖到这里</strong></p>
+        <p class="muted">支持 MP4 / MOV / AVI / MKV 等视频，以及 JPG / PNG / WebP 等图片。支持分片上传与进度显示。</p>
+        <div class="row" style="justify-content:center;margin-top:12px">
+          <button class="btn" onclick="document.getElementById('fileInput').click()">选择文件</button>
+          <button class="btn" onclick="document.getElementById('folderInput').click()">选择文件夹</button>
+        </div>
+        <input type="file" id="fileInput" multiple style="display:none" accept="video/*,image/*">
+        <input type="file" id="folderInput" webkitdirectory multiple style="display:none">
+      </div>
+      <div id="upload-list" class="mt"></div>
+    </div>
+    <div class="card">
+      <div class="section-title">已上传素材（实时分析状态）</div>
+      <div id="mat-mini" class="thumb-grid"></div>
+      <div id="mat-empty" class="empty" style="display:none">还没有素材，先上传吧。</div>
+    </div>
+  </div>
+
+  <!-- 一次修改 -->
+  <div class="tab-content" id="tab-inspect">
+    <div class="card">
+      <div class="row wrap">
+        <div class="section-title" style="margin:0">一次修改（素材编辑）</div>
+        <div class="spacer"></div>
+        <span class="muted" id="ed-done-hint">已完成 0/0</span>
+        <button class="btn btn-sm" id="ed-done-all" onclick="markAllEditDone()">全部标记完成</button>
+        <button class="btn btn-sm btn-primary" onclick="finishEditAndGo()">修改完成，去一键美颜 →</button>
+      </div>
+      <p class="muted mt">点素材放大后剪辑：<b>画面</b>和<b>音频</b>分成两条轨，按住色块可<b>整段拖动</b>、拖两端改范围，选中后按 <b>Delete</b> 删除（音频轨上是静音这一段）；分割后删掉卡顿的中间段，前后自动<b>拼起来</b>。还能<b>变速</b>（0.5x～3x）和调<b>音量/静音</b>。<b>原始文件不会被修改或删除</b>。支持<b>反复保存</b>：保存（替换/另存）后可以继续剪辑再保存，长素材可以一段一段剪出来逐条「另存为新素材」；已<b>「完成修改」</b>的素材也随时可以点回来改，改完重新保存即可。</p>
+    </div>
+
+    <div class="card" id="inspect-list-card">
+      <div class="row" style="align-items:center;gap:8px">
+        <div class="section-title" style="margin:0;white-space:nowrap" id="il-title">素材明细</div>
+        <span class="chip" id="il-done" style="white-space:nowrap">已完成 0/0</span>
+        <span class="chip" id="il-parts" style="white-space:nowrap;display:none">分类 0/0</span>
+        <div class="spacer"></div>
+      </div>
+      <p class="muted" id="il-hint" style="font-size:11.5px;margin:6px 0 0"></p>
+      <!-- 放大剪辑面板：点击素材后在此放大显示，下方为剪辑栏 -->
+      <div id="mat-editor-panel" class="mat-editor-panel" style="display:none">
+        <div class="row" style="align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px">
+          <div class="section-title" style="margin:0" id="mep-title">手动剪辑</div>
+          <div class="spacer"></div>
+          <span class="muted me-tip">按 <kbd>空格</kbd> 播放 / 暂停 · <kbd>Delete</kbd> 删除选中片段 · <kbd>M</kbd> 打标记 · <kbd>C</kbd> 剪刀 · <kbd>Ctrl+Z</kbd> 撤回 · 片段可按住上下换轨</span>
+          <button class="btn btn-sm" onclick="closeMatEditor()">✕ 收起</button>
+        </div>
+        <div class="mep-stage">
+          <video id="mev" class="me-video" preload="metadata" playsinline onclick="edPlay()"></video>
+          <div class="me-black" id="me-black" style="display:none"><span>这一段时间轴是空的</span></div>
+        </div>
+        <div class="me-timeline" id="metimeline"></div>
+        <div class="row me-statusbar">
+          <b id="mect">0.0s</b>
+          <span class="muted" id="mesum">保留 <b id="melen">-</b></span>
+          <span class="spacer"></span>
+          <span class="me-track-ctrl">
+            <button class="me-mini" id="me-mute-all" onclick="edToggleMuteAll()" title="整条音轨静音">有声</button>
+            <select id="me-vol" onchange="edSetVolume(this.value)" title="整条音轨音量">
+              <option value="0.5">音量 50%</option>
+              <option value="0.8">音量 80%</option>
+              <option value="1">音量 100%</option>
+              <option value="1.2">音量 120%</option>
+              <option value="1.5">音量 150%</option>
+              <option value="1.8">音量 180%</option>
+              <option value="2">音量 200%</option>
+              <option value="2.5">音量 250%</option>
+            </select>
+          </span>
+          <b id="medur">-</b>
+        </div>
+        <div class="row" style="gap:6px;flex-wrap:wrap" id="mep-btns"></div>
+      </div>
+      <div id="inspect-grid" class="thumb-grid mt"></div>
+    </div>
+  </div>
+
+  <!-- 一键美颜（可选） -->
+  <div class="tab-content" id="tab-beauty">
+    <div class="card">
+      <div class="row wrap">
+        <div class="section-title" style="margin:0">一键美颜（可选）</div>
+        <div class="spacer"></div>
+        <span class="muted" style="font-size:11.5px">可与「④ 字幕识别」同时进行</span>
+        <label class="field" style="min-width:150px"><span>美颜强度</span>
+          <select id="beauty-preset">
+            <option value="mild">适度（推荐）</option>
+            <option value="strong">明显</option>
+          </select>
+        </label>
+        <button class="btn btn-sm btn-primary" id="beautyBtn" onclick="startBeauty()">开始一键美颜</button>
+        <button class="btn btn-sm" onclick="switchTab('asr')">跳过美颜，直接去字幕识别 →</button>
+      </div>
+      <p class="muted mt">只处理「② 一次修改」里标记<b>已完成</b>的素材（刚上传没完成的不会出现在下面，也不参与美颜）。对人物<b>磨皮祛痘、轻微瘦脸</b>（AI 人脸感知，只作用于皮肤：<b>眼睛、眉毛、嘴唇、眼镜、头发都不磨</b>，人脸始终清晰）、给产品<b>增加饱和度</b>、整体<b>提亮一档</b>（比之前更亮，不再发暗）；美颜保持适度，不改变内容与构图。按「一次修改」的截取结果处理，<b>原始文件不会被修改</b>，可随时撤销。</p>
+      <div class="progress-wrap mt" id="beauty-progress" style="display:none">
+        <div class="status-row">
+          <span class="status-ico" id="bp-ico" style="display:none"></span>
+          <div id="bp-status">准备中…</div>
+          <span class="muted eta" id="bp-eta" style="margin-left:auto;font-size:11.5px;white-space:nowrap"></span>
+        </div>
+        <div class="bar" id="bp-barwrap"><div id="bp-bar"></div></div>
+        <div class="log" id="bp-log"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="row">
+        <div class="section-title" style="margin:0" id="bl-title">素材列表</div>
+        <div class="spacer"></div>
+        <button class="btn btn-sm" onclick="setBeautyPickAll(true)" title="全部素材都参与美颜">全选</button>
+        <button class="btn btn-sm" onclick="setBeautyPickAll(false)" title="全部素材都不美颜">全不选</button>
+        <button class="btn btn-sm btn-primary" onclick="switchTab('asr')">美颜完成，去字幕识别 →</button>
+      </div>
+      <p class="muted mt" style="margin-top:6px">只有<b>打勾</b>的素材才会美颜，没打勾的原样进成片（想只给部分产品美颜时用）。</p>
+      <div id="beauty-grid" class="thumb-grid mt"></div>
+    </div>
+  </div>
+
+  <!-- 字幕识别 -->
+  <div class="tab-content" id="tab-asr">
+    <div class="card" id="asr-card">
+      <div class="row wrap">
+        <div class="section-title" style="margin:0">口播字幕识别（本机离线）</div>
+        <div class="spacer"></div>
+        <span class="muted" id="asr-engine">检查识别环境…</span>
+        <span class="chip warn" id="asr-waiting" style="display:none" title="这些素材还没在「② 一次修改」点「完成修改」，不会参与识别"></span>
+        <span class="muted" style="font-size:11.5px">可与「③ 一键美颜」同时进行</span>
+        <button class="btn btn-sm btn-primary" id="asrBtn" onclick="startAsr()">识别口播字幕</button>
+        <button class="btn btn-sm" onclick="switchTab('render')">识别完成，去混剪 →</button>
+      </div>
+      <p class="muted mt">只识别「② 一次修改」里标记<b>已完成</b>的素材（刚上传没完成的不会出现在列表里）。用本机识别模型逐段识别人声，得到<b>词级时间轴</b>的字幕（不是等分假字幕），成片与 SRT 都用它；同时标出<b>重复口播</b>供你决定剪哪一段。全程离线，不联网、不上传。</p>
+      <div class="row mt wrap">
+        <label class="field" style="min-width:180px"><span>识别模型</span>
+          <select id="asr-model"></select>
+        </label>
+        <label class="row" style="gap:6px;align-items:center;font-size:12px">
+          <input type="checkbox" id="asr-force"> 已识别的也重新识别
+        </label>
+      </div>
+      <div class="progress-wrap mt" id="asr-progress" style="display:none">
+        <div class="status-row">
+          <span class="status-ico" id="asp-ico" style="display:none"></span>
+          <div id="asp-status">准备中…</div>
+          <span class="muted eta" id="asp-eta" style="margin-left:auto;font-size:11.5px;white-space:nowrap"></span>
+        </div>
+        <div class="bar" id="asp-barwrap"><div id="asp-bar"></div></div>
+        <div class="log" id="asp-log"></div>
+      </div>
+      <div id="asr-list" class="mt"></div>
+    </div>
+  </div>
+
+  <!-- 混剪 -->
+  <div class="tab-content" id="tab-render">
+    <div class="card">
+      <div class="section-title">按分类混剪</div>
+      <p class="muted" style="font-size:12px;margin:2px 0 10px">
+        混剪顺序：<b>开头 → 材质 → 规格 → 讲解 → 片尾</b>。开头、片尾各用 1 个素材，中间按总时长自动从材质 / 规格 / 讲解素材里混搭填满；每段素材用自己识别的字幕。
+      </p>
+      <div class="row wrap" id="part-summary" style="gap:8px;margin-bottom:8px"></div>
+      <div id="part-warn" class="muted" style="font-size:12px;color:#c0392b;display:none;margin-bottom:8px"></div>
+
+      <div class="row wrap" style="gap:16px;margin:6px 0">
+        <label class="field" style="min-width:190px"><span>最短总时长（秒）</span>
+          <input id="rd-duration" type="number" min="5" max="180" step="1" style="max-width:110px" onchange="onDurationInput()"></label>
+        <label class="field" style="min-width:150px"><span>生成数量（条）</span>
+          <input id="rd-count" type="number" min="1" max="10" step="1" style="max-width:110px" onchange="onCountInput()"></label>
+        <label class="field" style="min-width:200px"><span>视频类型</span>
+          <select id="tpl-select" style="max-width:230px" onchange="saveTemplate()"></select></label>
+      </div>
+
+      <div class="row mt wrap">
+        <label class="field" style="min-width:300px"><span>字幕来源</span>
+          <select id="sub-source" onchange="setSubtitleSource(this.value)">
+            <option value="auto">自动：有口播识别就用真实字幕</option>
+            <option value="asr">只用真实语音字幕（每段素材自己的字幕）</option>
+            <option value="script">只用脚本卖点字幕</option>
+          </select>
+        </label>
+        <span class="muted" id="sub-source-hint"></span>
+      </div>
+
+      <details class="mt">
+        <summary style="cursor:pointer;font-weight:600">默认字幕样式（生成后可在结果页逐段改）</summary>
+        <div class="row wrap" style="gap:16px;margin-top:8px;align-items:flex-end">
+          <label class="field" style="min-width:200px"><span>字号占比 <i id="rd-capSize-val" style="font-style:normal;color:#1a6fc4"></i></span>
+            <input id="rd-capSize" type="range" min="0.02" max="0.08" step="0.005" style="width:160px" oninput="document.getElementById('rd-capSize-val').textContent=this.value"></label>
+          <label class="field" style="min-width:110px"><span>位置</span>
+            <select id="rd-capPos"><option value="0.12">顶部</option><option value="0.5">中间</option><option value="0.85" selected>底部</option></select></label>
+          <label class="field" style="min-width:90px"><span>颜色</span>
+            <select id="rd-capColor"><option value="white">白</option><option value="yellow">黄</option><option value="red">红</option><option value="green">绿</option><option value="#00FFFF">青</option></select></label>
+          <label class="field" style="min-width:90px"><span>描边色</span>
+            <select id="rd-capOutlineColor"><option value="black">黑</option><option value="white">白</option></select></label>
+          <button class="btn btn-sm" onclick="saveSubtitleStyle()">保存默认样式</button>
+        </div>
+      </details>
+
+      <div class="section-title" style="margin-top:14px">背景音乐</div>
+      <div class="row wrap">
+        <span id="music-status" class="muted"></span>
+        <div class="spacer"></div>
+        <select id="lib-gen-sel" style="max-width:210px" title="选择风格后生成一首原创配乐入库（可商用、无第三方版权）"></select>
+        <button class="btn btn-sm" onclick="libGenerate()" title="按左侧风格生成一首原创配乐并加入素材库">✨ 生成入库</button>
+        <button class="btn btn-sm" onclick="document.getElementById('musicInput').click()" title="上传自有版权音乐加入素材库，所有项目可复用">⬆ 上传入库</button>
+        <button class="btn btn-sm btn-danger" id="musicDel" style="display:none" onclick="clearMusicChoice()">取消选用</button>
+        <input type="file" id="musicInput" accept="audio/*" style="display:none">
+      </div>
+      <div id="music-lib" class="mt"></div>
+      <audio id="music-audio" style="display:none"></audio>
+      <div class="row mt wrap" id="music-preset-row">
+        <label class="field" style="min-width:220px"><span>未选用素材库时的自动配乐风格</span>
+          <select id="music-preset" onchange="setMusicPreset(this.value)"></select>
+        </label>
+        <div class="row" style="gap:6px;align-items:flex-end">
+          <button class="btn btn-sm" onclick="auditionMusic()">试听</button>
+          <span class="muted" id="music-preset-hint"></span>
+        </div>
+      </div>
+    </div>
+    <div class="row mt">
+      <button class="btn btn-primary" id="renderBtn" onclick="startRender()">开始混剪</button>
+      <span class="muted" id="render-hint">将按分类顺序自动生成</span>
+    </div>
+    <div class="progress-wrap" id="render-progress" style="display:none">
+      <div class="status-row">
+        <span class="status-ico" id="rp-ico" style="display:none"></span>
+        <div id="rp-status">准备中…</div>
+        <span class="muted eta" id="rp-eta" style="margin-left:auto;font-size:11.5px;white-space:nowrap"></span>
+      </div>
+      <div class="bar" id="rp-barwrap"><div id="rp-bar"></div></div>
+      <div class="log" id="rp-log"></div>
+    </div>
+    <div class="card" id="render-warnings" style="display:none">
+      <div class="section-title">生成提示</div>
+      <div id="rw-list"></div>
+    </div>
+  </div>
+
+  <!-- 结果 -->
+  <div class="tab-content" id="tab-results">
+    <div class="card">
+      <div class="row">
+        <div class="section-title" style="margin:0">生成结果</div>
+        <div class="spacer"></div>
+        <button class="btn btn-sm" id="vidAllBtn" onclick="vidPickAll()" style="display:none">全选</button>
+        <button class="btn btn-sm btn-danger" id="vidDelBtn" onclick="vidDelPicked()" style="display:none" disabled>批量删除</button>
+        <button class="btn btn-sm" id="zipBtn" onclick="downloadZip()">ZIP 批量下载</button>
+      </div>
+      <div id="video-grid" class="video-grid mt"></div>
+      <div id="video-empty" class="empty" style="display:none">还没有生成视频。请先到「自动混剪」开始生成。</div>
+    </div>
+  </div>
+
+  <!-- 素材库 -->
+  <div class="tab-content" id="tab-library">
+    <div class="card">
+      <div class="row wrap">
+        <input id="lib-search" placeholder="搜索产品名 / 文件名" style="max-width:240px" oninput="renderLibrary()">
+        <select id="lib-cat" onchange="renderLibrary()" style="max-width:160px">
+          <option value="">全部分类</option>
+          <option>产品展示</option><option>细节特写</option><option>使用场景</option>
+          <option>生产过程</option><option>包装过程</option><option>仓库发货</option>
+          <option>口播讲解</option><option>其他</option>
+        </select>
+        <select id="lib-proj" onchange="renderLibrary()" style="max-width:200px"></select>
+      </div>
+      <div id="lib-grid" class="thumb-grid mt"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal" onclick="if(event.target===this) closeModal()">
+  <div class="modal">
+    <div style="text-align:right"><button class="btn btn-sm" onclick="closeModal()">关闭</button></div>
+    <video id="modal-video" controls></video>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="sub-edit-modal" onclick="if(event.target===this) closeSubEdit()">
+  <div class="modal" style="max-width:780px;width:94%">
+    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div class="section-title" id="sub-edit-title" style="margin:0">字幕逐段调整</div>
+      <button class="btn btn-sm" onclick="closeSubEdit()">✕</button>
+    </div>
+    <div id="sub-edit-body" style="max-height:62vh;overflow:auto"></div>
+    <div class="row mt" style="justify-content:flex-end;gap:8px">
+      <button class="btn" onclick="closeSubEdit()">取消</button>
+      <button class="btn btn-primary" onclick="applySubEdit()">应用并重新生成</button>
+    </div>
+  </div>
+</div>
+
+<!-- 成片编辑：字幕快调 + 二次剪辑 -->
+<div class="modal-backdrop" id="video-edit-modal" onclick="if(event.target===this) veClose()">
+  <div class="modal" style="max-width:860px;width:94%">
+    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div class="section-title" id="ve-title" style="margin:0">编辑成片</div>
+      <button class="btn btn-sm" onclick="veClose()">✕</button>
+    </div>
+    <div style="max-height:64vh;overflow:auto">
+      <div id="ve-stage" style="background:#000;border-radius:8px;overflow:hidden;line-height:0;position:relative">
+        <video id="ve-video" controls playsinline style="width:100%;max-height:44vh;object-fit:contain"></video>
+        <div id="ve-preview" style="display:none;position:absolute;left:0;right:0;text-align:center;pointer-events:none;font-family:'Microsoft YaHei','PingFang SC',sans-serif;font-weight:700;line-height:1.35;white-space:normal"></div>
+        <div id="ve-preview-tip" style="display:none;position:absolute;top:8px;right:8px;background:rgba(0,0,0,.55);color:#fff;font-size:11px;line-height:1;padding:4px 8px;border-radius:999px;pointer-events:none">实时预览 · 应用后按此重渲</div>
+      </div>
+      <div class="muted" style="font-size:11.5px;margin:6px 0 2px" id="ve-meta"></div>
+
+      <div class="section-title" style="margin:10px 0 6px;font-size:13.5px">① 字幕调整（整条快调）</div>
+      <div class="row wrap" style="gap:10px;align-items:flex-end">
+        <label class="field" style="min-width:150px"><span>字号比例 <b id="ve-size-v"></b></span>
+          <input type="range" id="ve-size" min="0.015" max="0.08" step="0.001" oninput="document.getElementById('ve-size-v').textContent=(this.value*100).toFixed(1)+'%';veUpdatePreview()">
+        </label>
+        <label class="field" style="min-width:130px"><span>垂直位置 <b id="ve-pos-v"></b></span>
+          <input type="range" id="ve-pos" min="0.40" max="0.95" step="0.01" oninput="document.getElementById('ve-pos-v').textContent=Math.round(this.value*100)+'%';veUpdatePreview()">
+        </label>
+        <label class="field" style="min-width:80px"><span>字幕色</span><input type="color" id="ve-color" oninput="veUpdatePreview()"></label>
+        <label class="field" style="min-width:80px"><span>描边色</span><input type="color" id="ve-outline" oninput="veUpdatePreview()"></label>
+        <button class="btn btn-sm btn-primary" onclick="veApplySubtitle()">应用并重渲</button>
+        <button class="btn btn-sm" onclick="veOpenSubEdit()">逐段精调</button>
+      </div>
+
+      <div class="section-title" style="margin:12px 0 6px;font-size:13.5px">② 二次剪辑（保留选中的区间，其余剪掉）</div>
+      <div class="row wrap" style="gap:8px;margin-bottom:6px">
+        <button class="btn btn-sm" onclick="veAddRange()">＋ 添加保留区间</button>
+        <button class="btn btn-sm" onclick="veMarkStart()">◀ 在播放处设起点</button>
+        <button class="btn btn-sm" onclick="veMarkEnd()">在播放处设终点 ▶</button>
+      </div>
+      <div id="ve-ranges" class="row wrap" style="gap:8px"></div>
+      <div class="muted" style="font-size:11.5px;margin-top:6px">剪掉的是成片里对应的时段（烧录字幕跟着画面保留）；原片会自动备份，可放心反复剪。</div>
+    </div>
+    <div class="row mt" style="justify-content:flex-end;gap:8px">
+      <button class="btn" onclick="veClose()">关闭</button>
+      <button class="btn btn-primary" id="ve-cut-btn" onclick="veApplyCut()">按区间剪辑并保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="edit-modal" onclick="if(event.target===this) closeEditModal()">
+  <div class="modal edit-modal">
+    <div class="modal-head">
+      <h3>编辑项目参数</h3>
+      <button class="btn btn-sm" type="button" onclick="closeEditModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <label class="field"><span>产品类别</span>
+        <select id="ed-category">
+          <option>包装盒</option><option>手提袋</option><option>标签贴纸</option>
+          <option>吊牌</option><option>礼品盒</option><option>印刷品</option>
+          <option>邀请函</option><option>其他</option>
+        </select>
+      </label>
+      <label class="field"><span>视频比例</span>
+        <select id="ed-ratio">
+          <option value="9:16">9:16 竖屏（抖音默认）</option>
+          <option value="1:1">1:1 方形</option>
+          <option value="4:3">4:3</option>
+          <option value="16:9">16:9 横屏</option>
+          <option value="__custom__">自定义比例…</option>
+        </select>
+      </label>
+      <div class="row" id="ed-ratioCustomWrap" style="display:none;margin:-6px 0 16px">
+        <label class="field" style="flex:1;margin:0"><span>宽（比例）</span><input id="ed-ratioW" type="number" min="1" max="99" value="3"></label>
+        <span class="muted" style="font-weight:700;padding-top:26px">:</span>
+        <label class="field" style="flex:1;margin:0"><span>高（比例）</span><input id="ed-ratioH" type="number" min="1" max="99" value="4"></label>
+      </div>
+      <div class="grid cols-2">
+        <label class="field"><span>视频时长</span>
+          <select id="ed-duration">
+            <option value="15">15 秒</option><option value="30">30 秒</option>
+            <option value="45">45 秒</option><option value="60">60 秒</option>
+            <option value="0">自定义</option>
+          </select>
+        </label>
+        <label class="field" id="ed-durationCustomWrap" style="display:none"><span>自定义时长（秒）</span>
+          <input id="ed-durationCustom" type="number" min="5" max="300" value="30" />
+        </label>
+        <label class="field"><span>单次生成数量</span>
+          <select id="ed-count">
+            <option value="1">1 条</option><option value="3">3 条</option>
+            <option value="5">5 条</option><option value="10">10 条</option>
+            <option value="0">自定义</option>
+          </select>
+        </label>
+        <label class="field" id="ed-countCustomWrap" style="display:none"><span>自定义数量</span>
+          <input id="ed-countCustom" type="number" min="1" max="30" value="3" />
+        </label>
+      </div>
+      <label class="field"><span>视频类型</span>
+        <select id="ed-style"></select>
+      </label>
+      <p class="muted" style="font-size:12px;line-height:1.7;margin:2px 0 0">修改比例 / 时长 / 数量后，需到「③ 自动混剪」重新生成视频才会生效；已生成的视频不会自动变更。</p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-primary" id="ed-save" type="button" onclick="saveProjectEdit()">保存修改</button>
+      <button class="btn" type="button" onclick="closeEditModal()">取消</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="asr-modal" onclick="if(event.target===this) closeAsrModal()">
+  <div class="modal edit-modal">
+    <div class="modal-head">
+      <h3 id="asr-modal-title">字幕时间轴</h3>
+      <button class="btn btn-sm" type="button" onclick="closeAsrModal()">✕</button>
+    </div>
+    <div class="modal-body" id="asr-modal-body"></div>
+    <div class="modal-foot">
+      <button class="btn" type="button" id="asr-modal-srt">下载 SRT</button>
+      <button class="btn" type="button" onclick="closeAsrModal()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 美颜前后对比 -->
+<div class="modal-backdrop" id="cmp-modal" onclick="if(event.target===this) closeCmp()">
+  <div class="modal edit-modal">
+    <div class="modal-head">
+      <h3>美颜前后对比 · <span id="cmp-name"></span></h3>
+      <button class="btn btn-sm" type="button" onclick="closeCmp()">✕</button>
+    </div>
+    <div class="cmp-body">
+      <div class="cmp-col"><div class="cmp-tag">原片（美颜前）</div><video id="cmp-before" playsinline></video></div>
+      <div class="cmp-col"><div class="cmp-tag ok">美颜后</div><video id="cmp-after" playsinline></video></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-primary" type="button" id="cmp-play" onclick="cmpToggle()">播放</button>
+      <span class="muted" id="cmp-time">0.0s</span>
+      <button class="btn" type="button" onclick="closeCmp()">关闭</button>
+    </div>
+  </div>
+</div>
+<div class="toast"></div>
+
+<script src="/js/common.js?v=20261028m"></script>
+<script>
+let PID = new URLSearchParams(location.search).get('id');
+let project = null;
+let matMap = {};
+window.TEMPLATES = [];
+API.get('/api/project-templates').then(d=>{ window.TEMPLATES = d.templates||[]; if(project) loadProject(); }).catch(()=>{});
+
+// 顶部标签切换
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>switchTab(t.dataset.tab)));
+// 需要「一次修改完成」才能进的步骤：没有完成素材时先拦回上一步
+const GATED_TABS = { beauty:1, asr:1, render:1 };
+function switchTab(name){
+  if (GATED_TABS[name] && project) {
+    const total=(project.materials||[]).length;
+    if (total > 0 && editDoneCount() === 0) {
+      toast('先在「② 一次修改」里点「完成修改」，素材才会出现在这一步');
+      name = 'inspect';
+    }
+  }
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===name));
+  document.querySelectorAll('.tab-content').forEach(c=>c.classList.toggle('active', c.id==='tab-'+name));
+  if(name==='results') renderVideos();
+  if(name==='library') { loadLibProjects(); renderLibrary(); }
+  if(name==='inspect') loadInspect();
+  if(name==='beauty') loadBeauty();
+  if(name==='asr') loadAsr();
+  if(name==='render') loadRender();
+  updateTabLocks();
+}
+
+async function loadProject(){
+  project = await API.get('/api/projects/'+PID);
+  document.getElementById('proj-name').textContent = project.name;
+  const pt = document.getElementById('proj-title');
+  if (pt) pt.textContent = project.name;
+  document.getElementById('proj-meta').innerHTML = `
+    <span class="pf"><i>类别</i>${esc(project.category)}</span>
+    <span class="pf"><i>比例</i>${esc(project.ratio)}</span>
+    <span class="pf"><i>时长</i>${project.duration} 秒</span>
+    <span class="pf"><i>数量</i>${project.count} 条</span>
+    <span class="pf"><i>模板</i>${esc(project.style)}</span>
+    <button class="proj-edit-btn" type="button" onclick="openEditModal()">✏️ 编辑</button>`;
+  // 渲染页（自动混剪）的细节在 loadRender() 里填充，切到该 tab 时调用
+  loadMusicPresets();   // 内部会再加载音乐素材库并刷新选用状态
+  renderMatMini();
+  renderVideos();
+  renderSubtitleSource();
+  loadRender();
+  buildMatMap();
+  renderInspect();   // 一次修改页的「已完成 X/Y」和步骤锁要立刻是对的
+  updateTabLocks();
+}
+
+async function saveTemplate(){
+  const sel=document.getElementById('tpl-select'); if(!sel) return;
+  try{
+    await API.patch('/api/projects/'+PID,{style:sel.value});
+    toast('模板已切换，重新生成后生效');
+    await loadProject();
+  }catch(e){ toast(e.message); }
+}
+
+// ===== 编辑项目参数 =====
+const DUR_PRESETS = ['15','30','45','60'];
+const CNT_PRESETS = ['1','3','5','10'];
+document.getElementById('ed-duration').addEventListener('change', e=>{ document.getElementById('ed-durationCustomWrap').style.display = e.target.value==='0'?'block':'none'; });
+document.getElementById('ed-count').addEventListener('change', e=>{ document.getElementById('ed-countCustomWrap').style.display = e.target.value==='0'?'block':'none'; });
+document.getElementById('ed-ratio').addEventListener('change', e=>{ document.getElementById('ed-ratioCustomWrap').style.display = e.target.value==='__custom__'?'flex':'none'; });
+
+const RATIO_PRESETS = ['9:16','1:1','4:3','16:9'];
+function readEditRatio(){
+  const sel = document.getElementById('ed-ratio');
+  if (sel.value !== '__custom__') return sel.value;
+  const w = +document.getElementById('ed-ratioW').value, h = +document.getElementById('ed-ratioH').value;
+  if (!w || !h || w < 1 || h < 1 || w > 99 || h > 99) throw new Error('请填写有效的自定义比例（宽、高均为 1–99）');
+  return w + ':' + h;
+}
+function setEditRatio(ratio){
+  const sel = document.getElementById('ed-ratio'), wrap = document.getElementById('ed-ratioCustomWrap');
+  if (RATIO_PRESETS.includes(ratio)) { sel.value = ratio; wrap.style.display = 'none'; }
+  else {
+    const m = /^(\d+):(\d+)$/.exec(String(ratio||''));
+    sel.value = '__custom__'; wrap.style.display = 'flex';
+    if (m) { document.getElementById('ed-ratioW').value = +m[1]; document.getElementById('ed-ratioH').value = +m[2]; }
+  }
+}
+
+function openEditModal(){
+  const p = project; if(!p) return;
+  document.getElementById('ed-category').value = p.category || '';
+  setEditRatio(p.ratio || '9:16');
+  const durSel = document.getElementById('ed-duration'), durWrap = document.getElementById('ed-durationCustomWrap');
+  if (DUR_PRESETS.includes(String(p.duration))) { durSel.value = String(p.duration); durWrap.style.display='none'; }
+  else { durSel.value = '0'; durWrap.style.display='block'; document.getElementById('ed-durationCustom').value = p.duration; }
+  const cntSel = document.getElementById('ed-count'), cntWrap = document.getElementById('ed-countCustomWrap');
+  if (CNT_PRESETS.includes(String(p.count))) { cntSel.value = String(p.count); cntWrap.style.display='none'; }
+  else { cntSel.value = '0'; cntWrap.style.display='block'; document.getElementById('ed-countCustom').value = p.count; }
+  const styleSel = document.getElementById('ed-style');
+  {
+    const list = window.TEMPLATES || [];
+    const has = list.some(t=>t.name===p.style);
+    styleSel.innerHTML = list.map(t=>`<option value="${esc(t.name)}" ${t.name===p.style?'selected':''}>${esc(t.name)}</option>`).join('')
+      + ((has || !p.style) ? '' : `<option value="${esc(p.style)}" selected>${esc(p.style)}（当前）</option>`);
+    if (!styleSel.innerHTML) styleSel.innerHTML = `<option selected>${esc(p.style)}</option>`;
+  }
+  document.getElementById('edit-modal').classList.add('show');
+}
+function closeEditModal(){ document.getElementById('edit-modal').classList.remove('show'); }
+async function saveProjectEdit(){
+  const durSel = document.getElementById('ed-duration');
+  const duration = durSel.value==='0' ? Math.max(5, Math.min(300, (+document.getElementById('ed-durationCustom').value) || 30)) : (+durSel.value);
+  const cntSel = document.getElementById('ed-count');
+  const count = cntSel.value==='0' ? Math.max(1, Math.min(30, (+document.getElementById('ed-countCustom').value) || 1)) : (+cntSel.value);
+  const btn = document.getElementById('ed-save'); btn.disabled = true;
+  try {
+    const body = {
+      category: document.getElementById('ed-category').value,
+      ratio: readEditRatio(),
+      duration, count,
+      style: document.getElementById('ed-style').value,
+    };
+    await API.patch('/api/projects/'+PID, body);
+    await loadProject();
+    closeEditModal();
+    toast('项目参数已保存');
+  } catch(e){ toast(e.message); }
+  finally { btn.disabled = false; }
+}
+
+function buildMatMap(){ matMap={}; (project.materials||[]).forEach(m=>matMap[m.id]=m); }
+
+// ===== 上传 =====
+const dz=document.getElementById('dropzone');
+['dragenter','dragover'].forEach(e=>dz.addEventListener(e,ev=>{ev.preventDefault();dz.classList.add('drag');}));
+['dragleave','drop'].forEach(e=>dz.addEventListener(e,ev=>{ev.preventDefault();dz.classList.remove('drag');}));
+dz.addEventListener('drop',ev=>handleFiles(ev.dataTransfer.files));
+document.getElementById('fileInput').addEventListener('change',e=>handleFiles(e.target.files));
+document.getElementById('folderInput').addEventListener('change',e=>handleFiles(e.target.files));
+
+async function handleFiles(fileList){
+  const files=[...fileList].filter(f=>/\.(mp4|mov|avi|mkv|webm|flv|m4v|jpg|jpeg|png|webp|bmp|gif)$/i.test(f.name));
+  if(!files.length){ toast('没有支持的视频/图片文件'); return; }
+  // 先占位再并发：多个素材同时传，整体耗时约等于「最慢的那一个」而不是相加
+  const jobs = files.map(f=>{
+    const item=document.createElement('div'); item.className='upload-item';
+    item.innerHTML=`<div class="name">${esc(f.name)}</div><div class="bar"><div></div></div><div class="state">0%</div>`;
+    document.getElementById('upload-list').prepend(item);
+    return { f, item, bar:item.querySelector('.bar > div'), state:item.querySelector('.state') };
+  });
+  let cur=0, okCount=0, failMsg='';
+  async function worker(){
+    while(cur < jobs.length){
+      const job = jobs[cur++];
+      try{
+        await uploadFile(PID, job.f, p=>{
+          const v = Math.min(99, Math.round(p));
+          job.bar.style.width = v+'%';
+          job.state.textContent = v+'%';
+        });
+        job.bar.style.width='100%';
+        job.item.classList.add('done');
+        job.state.innerHTML='<span class="up-tick">✓</span>已上传';
+        okCount++;
+      }catch(e){
+        job.item.classList.add('fail');
+        job.state.textContent='失败：'+e.message;
+        if(!failMsg) failMsg = e.message;
+      }
+    }
+  }
+  const CONC = 3; // 同时传 3 个
+  await Promise.all(Array.from({length:Math.min(CONC, jobs.length)}, worker));
+  await refreshProject();
+  if(failMsg) toast(failMsg);
+}
+
+async function refreshProject(){ project=await API.get('/api/projects/'+PID); buildMatMap(); renderMatMini(); renderInspect(); if(asrData) loadAsr(); renderSubtitleSource(); }
+
+function renderMatMini(){
+  const wrap=document.getElementById('mat-mini'); const mats=project.materials||[];
+  document.getElementById('mat-empty').style.display = mats.length?'none':'block';
+  wrap.innerHTML=mats.map(m=>`
+    <div class="mat-card">
+      <div class="media">${matMedia(m,'thumb')}<button class="mini-del" title="删除该素材" onclick="delMatMini(event,'${m.id}')">✕</button></div>
+      <div class="body"><div class="title">${esc(m.originalName)}</div>
+      <div class="tag-row"><span class="chip ${statusChip(m)}">${matStatusText(m)}</span></div></div>
+    </div>`).join('');
+}
+function matMedia(m, kind){
+  // 缩略图接口统一返回 JPEG，一律用 img 渲染（视频素材也是取首帧图）
+  return `<img src="/api/projects/${PID}/materials/${m.id}/${kind}" loading="lazy" onerror="this.style.display='none'">`;
+}
+function statusChip(m){ if(m.status==='error')return 'bad'; if(m.status==='analyzed')return m.usable?'ok':'warn'; return 'warn'; }
+function matStatusText(m){ return {pending:'等待',analyzing:'分析中',analyzed:m.usable?'可用':'需关注',error:'分析失败'}[m.status]||m.status; }
+
+// ===== 分析（旧「素材分类」步骤已移除：分类改由 AI 自动判定，口播/展示由本机 Whisper 识别结果决定）=====
+async function setFlag(id,flag,v){ await API.patch(`/api/projects/${PID}/materials/${id}`,{[flag]:v}); await refreshProject(); }
+async function delMat(id){ if(!confirm('删除该素材？'))return; await API.del(`/api/projects/${PID}/materials/${id}`); await refreshProject(); }
+// 上传页小卡片删除按钮
+async function delMatMini(ev,id){
+  ev.preventDefault(); ev.stopPropagation();
+  if(!confirm('删除该素材？删除后不可恢复。'))return;
+  const btn=ev.currentTarget; btn.disabled=true; btn.textContent='…';
+  try{ await API.del(`/api/projects/${PID}/materials/${id}`); toast('素材已删除'); await refreshProject(); }
+  catch(e){ toast('删除失败：'+e.message); btn.disabled=false; btn.textContent='✕'; }
+}
+
+// ===== 一次修改（素材编辑）=====
+let matNoMap = {};
+// 素材人工分类：运营手动选，决定自动混剪里的出场位置（开头 → 材质 → 规格 → 讲解 → 片尾）
+const MAT_PARTS = ['开头', '片尾', '材质', '规格', '讲解'];
+
+async function loadInspect(){
+  if(!project) { try{ project=await API.get('/api/projects/'+PID); }catch(e){ return; } }
+  renderInspect();
+}
+function renderInspect(){
+  if(!project) return;
+  const list = (project.materials||[]);
+  matNoMap = {};
+  list.forEach((m,i)=>{ matNoMap[m.id]=i+1; });
+  const done = list.filter(m=>m.editDone).length;
+  document.getElementById('il-title').textContent = `素材明细（${list.length}）`;
+  const doneChip = document.getElementById('il-done');
+  if(doneChip){
+    doneChip.textContent = `已完成 ${done}/${list.length}`;
+    doneChip.className = 'chip ' + (done ? 'ok' : 'warn');
+  }
+  document.getElementById('il-hint').textContent = '点素材放大：画面 3 轨 + 音频 2 轨，按住色块可横向拖动、上下换轨，拖两端改范围，按 Delete 删除；上方轨盖住下方轨，所有轨都空着是黑场。右侧可变速 0.5x～3x，进度条上任意位置可打标记（＋标记 / M）。每张卡片下方可选「开头 / 片尾 / 材质 / 规格 / 讲解」，自动混剪时按这个分类决定出场顺序（开头→材质→规格→讲解→片尾）。改好后点卡片上的「完成修改」。';
+  // 分类统计：让运营一眼看出还有几条没分类
+  renderInspectParts();
+  const hint = document.getElementById('ed-done-hint');
+  if(hint) hint.textContent = `已完成 ${done}/${list.length}`;
+  const allBtn = document.getElementById('ed-done-all');
+  if(allBtn) allBtn.style.display = (list.length && done < list.length) ? '' : 'none';
+  document.getElementById('inspect-grid').innerHTML = list.map(m=>inspectCard(m)).join('')||'<div class="empty">还没有素材，先回上一步上传吧。</div>';
+  updateTabLocks();
+}
+
+// ===== 步骤推进：一次修改完成 → 才同步到后面几步 =====
+function editDoneCount(){
+  return (project&&project.materials||[]).filter(m=>m.editDone).length;
+}
+// ③④⑤ 的入口锁定状态（只做视觉提示，真正拦截在 switchTab 里）
+function updateTabLocks(){
+  if(!project) return;
+  const total=(project.materials||[]).length;
+  const locked = total>0 && editDoneCount()===0;
+  document.querySelectorAll('.tab').forEach(t=>{
+    if(!GATED_TABS[t.dataset.tab]) return;
+    t.classList.toggle('locked', locked);
+    t.title = locked ? '先在「② 一次修改」里点「完成修改」' : '';
+  });
+}
+// 选素材分类（开头 / 片尾 / 材质 / 规格 / 讲解）：只影响自动混剪的顺序，不动文件
+async function setMatPart(id, v){
+  const m = (project&&project.materials||[]).find(x=>x.id===id);
+  const prev = (m && m.part) || '';
+  const sel = document.querySelector(`.mat-part[data-id="${id}"]`);
+  const paint = (val)=>{
+    if(m) m.part = val || undefined;
+    if(sel){ sel.classList.toggle('has', !!val); }
+    renderInspectParts();
+  };
+  if(prev === (v||'')) return;
+  paint(v);
+  try{
+    const saved = await API.patch(`/api/projects/${PID}/materials/${id}`, { part: v || '' });
+    paint(saved.part || '');
+    if(v) toast(`已标为「${v}」，混剪时按分类排顺序`);
+  }catch(e){
+    paint(prev);
+    if(sel) sel.value = prev;
+    toast(e.message);
+  }
+}
+// 只刷新顶部「分类 x/y」统计，不整块重绘（避免打断正在操作的卡片）
+function renderInspectParts(){
+  const chip = document.getElementById('il-parts');
+  if(!chip || !project) return;
+  const list = project.materials||[];
+  if(!list.length){ chip.style.display='none'; return; }
+  const c = {}; MAT_PARTS.forEach(p=>c[p]=0);
+  let none = 0;
+  list.forEach(m=>{ if(c[m.part]!==undefined) c[m.part]++; else none++; });
+  chip.style.display = '';
+  chip.textContent = `分类 ${list.length-none}/${list.length}`
+    + (none? ` · 未分类 ${none}` : '')
+    + `（${MAT_PARTS.map(p=>p+' '+c[p]).join(' · ')}）`;
+  chip.className = 'chip ' + (none ? 'warn' : 'ok');
+}
+async function setMatEditDone(id, v){
+  try{
+    const saved = await API.patch(`/api/projects/${PID}/materials/${id}`, { editDone: !!v });
+    const m = (project.materials||[]).find(x=>x.id===id);
+    if(m){ m.editDone = !!saved.editDone; m.editDoneAt = saved.editDoneAt || null; }
+    renderInspect(); renderBeauty(); loadAsr(); updateTabLocks();
+    if(v) toast('这条素材已完成，已同步到「一键美颜」「字幕识别」');
+  }catch(e){ toast(e.message); }
+}
+async function markAllEditDone(){
+  const todo = (project.materials||[]).filter(m=>!m.editDone);
+  if(!todo.length) return true;
+  // 护栏：没设置分类的素材标记完成后会直接流进美颜/识别/混剪，先确认一次
+  const noPart = todo.filter(m=>!m.part);
+  if(noPart.length && !confirm(`其中 ${noPart.length} 条还没设置分类（开头/材质/规格/讲解/片尾），未分类素材在混剪时会排在讲解之后。\n仍要全部标记完成？`)) return false;
+  const btn = document.getElementById('ed-done-all');
+  if(btn){ btn.disabled = true; btn.textContent = '标记中…'; }
+  try{
+    await Promise.all(todo.map(m=>API.patch(`/api/projects/${PID}/materials/${m.id}`, { editDone: true })));
+    todo.forEach(m=>{ m.editDone = true; m.editDoneAt = m.editDoneAt || new Date().toISOString(); });
+    renderInspect(); renderBeauty(); loadAsr(); updateTabLocks();
+    toast(`已标记 ${todo.length} 条素材完成`);
+    return true;
+  }catch(e){ toast(e.message); return false; }
+  finally{ if(btn){ btn.disabled=false; btn.textContent='全部标记完成'; } }
+}
+// 「修改完成，去一键美颜」：只带已完成修改的素材过去。
+// 注意：绝不自动标记——刚上传还没分类/剪辑的素材必须留在上一步，
+// 想批量标记请用「全部标记完成」按钮（在「一次修改」里手动点）。
+async function finishEditAndGo(){
+  const mats = (project&&project.materials)||[];
+  const done = mats.filter(m=>m.type==='video'&&!m.excluded&&m.editDone).length;
+  const todo = mats.filter(m=>m.type==='video'&&!m.excluded&&!m.editDone).length;
+  if(!done){ toast('还没有素材标记「已完成」，先在下面的卡片上勾选完成'); return; }
+  if(todo) toast(`已完成的 ${done} 条会进入美颜/识别；还有 ${todo} 条未完成，留在「一次修改」处理`);
+  switchTab('beauty');
+}
+
+function inspectCard(m){
+  const no = matNoMap[m.id]||'';
+  const media = m.beauty
+    ? `<img src="/api/projects/${PID}/materials/${m.id}/beauty/thumb" loading="lazy" onerror="this.onerror=null;this.src='/api/projects/${PID}/materials/${m.id}/thumb'">`
+    : m.optimized
+    ? `<img src="/api/projects/${PID}/materials/${m.id}/optimized/thumb" loading="lazy" onerror="this.style.display='none'">`
+    : matMedia(m,'thumb');
+  const opt = m.beauty ? `<span class="chip ok">已美颜</span>` : (m.optimized ? `<span class="chip ok">已优化 ${fmtDur(m.optimized.duration)}</span>` : '');
+  const dur = m.duration||0;
+  const tin = Math.min(Number.isFinite(m.trimIn)?m.trimIn:0, dur);
+  const tout = Math.max(Math.min(Number.isFinite(m.trimOut)?m.trimOut:dur, dur), 0);
+  const pieces = (Array.isArray(m.pieces)&&m.pieces.length)?m.pieces:null;
+  // 多轨：保留时长 = 时间轴总长（重叠只算一次，空隙算在内）
+  const keptRaw = pieces ? pieces.reduce((mx,p)=>{
+    const t0 = +p.t0||0;
+    const vEnd = t0 + Math.max(0, p.out-p.in);
+    const hasOwn = Number.isFinite(+p.aIn)&&Number.isFinite(+p.aOut)&&(+p.aOut-+p.aIn)>0.1;
+    const aLen = hasOwn ? Math.max(0,+p.aOut-+p.aIn) : Math.max(0,p.out-p.in);
+    const aEnd = (Number.isFinite(+p.aT0)?+p.aT0:t0) + (p.aMute?0:aLen);
+    return Math.max(mx, vEnd, aEnd);
+  },0) : Math.max(0,tout-tin);
+  const multi = pieces ? pieces.some(p=>(+p.v>0)||(+p.a>0)) : false;
+  const spd = Number(m.speed)>0?Number(m.speed):1;
+  const keptOut = keptRaw/Math.max(0.1,spd);
+  const trimmed = keptRaw>0 && keptRaw < dur-0.05;
+  const isVideo = m.type==='video';
+  const durText = isVideo
+    ? `⏱ 原片 ${fmtDur(dur)}`
+      + (trimmed?` · 保留 ${keptOut.toFixed(1)}s${pieces&&pieces.length>1?`（${pieces.length} 段）`:''}`:'')
+      + (spd!==1?` · ${spd}x`:'')
+    : '🖼 图片素材';
+  const mediaDiv = isVideo
+    ? `<div class="media media-click ${edOpenId===m.id?'editing':''}" title="点击放大剪辑" onclick="openMatEditor('${m.id}')">${media}</div>`
+    : `<div class="media media-click" title="点击预览" onclick="previewMat('${m.id}')">${media}</div>`;
+  // 分类下拉：运营手动选，混剪时按「开头 → 材质 → 规格 → 讲解 → 片尾」排顺序
+  const partSel = `<select class="mat-part${m.part?' has':''}" data-id="${m.id}"
+      title="给这条素材分类：开头 / 片尾 / 材质 / 规格 / 讲解（自动混剪按这个排顺序）"
+      onchange="setMatPart('${m.id}', this.value)">
+      <option value=""${m.part?'':' selected'}>未分类</option>
+      ${MAT_PARTS.map(p=>`<option value="${p}"${m.part===p?' selected':''}>${p}</option>`).join('')}
+    </select>`;
+  return `
+    <div class="mat-card ${m.excluded?'excluded':''} ${m.editDone?'edit-done':''}" id="mat-card-${m.id}">
+      ${mediaDiv}
+      <div class="body">
+        <div class="row" style="align-items:center;gap:6px">
+          <span class="mat-no">${no}</span>
+          <div class="title" style="flex:1" title="${esc(m.name||m.originalName||'')}">${esc((m.name||m.originalName||'').slice(0,22))}</div>
+          <button class="btn btn-sm" style="padding:1px 7px" title="重命名" onclick="renameMat('${m.id}')">✎</button>
+        </div>
+        <div class="mat-dur">${durText}</div>
+        <div class="tag-row">
+          ${opt}
+          ${pieces&&pieces.length>1?`<span class="chip ok">${pieces.length} 段</span>`:''}
+          ${multi?'<span class="chip ok">多轨</span>':''}
+          ${spd!==1?`<span class="chip ok">${spd}x</span>`:''}
+          ${m.excluded?'<span class="chip bad">已排除</span>':''}
+          ${m.mustKeep?'<span class="chip ok">必留</span>':''}
+          ${m.keyShot?'<span class="chip ok">重点产品</span>':''}
+        </div>
+        <div class="row" style="gap:6px;align-items:center;margin-top:7px">
+          <span class="mat-part-lbl" title="自动混剪按这个分类排顺序：开头 → 材质 → 规格 → 讲解 → 片尾">分类</span>
+          ${partSel}
+          <div class="spacer"></div>
+        </div>
+        <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px">
+          ${m.editDone
+            ? `<span class="chip ok" title="这条已经进入后续步骤">✓ 已完成</span>
+               <div class="spacer"></div>
+               <button class="btn btn-sm" onclick="setMatEditDone('${m.id}',false)" title="撤销完成（会从后续步骤里移出）">撤销</button>`
+            : `<span class="muted" style="font-size:11.5px;white-space:nowrap">未完成</span>
+               <div class="spacer"></div>
+               <button class="btn btn-sm btn-primary" style="white-space:nowrap" onclick="setMatEditDone('${m.id}',true)">完成修改</button>`}
+        </div>
+      </div>
+    </div>`;
+}
+
+// ===== 多轨手动剪辑 =====
+// 画面 3 条轨（画面1 是主轨，往上依次盖在上面）+ 音频 2 条轨（音频1 底、音频2 上）
+// 成片按「上层盖下层」合成：同一时刻取轨号大的那条，所有轨都空着 = 黑场
+// 片段 = { t0 时间轴起点, in/out 原片画面区间, v 画面轨, a 音频轨,
+//          aT0/aIn/aOut 声音自己的位置与区间（不写=声音跟着画面走）, aMute 静音 }
+const ED_SPEEDS = [0.5, 0.8, 1, 1.25, 1.5, 2, 3];
+const ED_VOLS = [0.5, 0.8, 1, 1.2, 1.5, 1.8, 2, 2.5];
+// 预览音量 >100% 时用 Web Audio 增益真正放大（video.volume 浏览器上限只有 1.0，之前直接被钳在 100%，听不出差别）
+let edAudio = null;
+function edBoostEnsure(v) {
+  if (v <= 1.001) { if (edAudio) edAudio.gain.gain.value = 1; return true; }
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    const el = document.getElementById('mev');
+    if (!AC || !el) return false;
+    if (!edAudio) {
+      const ctx = new AC();
+      const src = ctx.createMediaElementSource(el);
+      const gain = ctx.createGain();
+      src.connect(gain); gain.connect(ctx.destination);
+      edAudio = { ctx, gain };
+    }
+    if (edAudio.ctx.state === 'suspended') edAudio.ctx.resume();
+    edAudio.gain.gain.value = v;
+    return true;
+  } catch (e) { return false; }
+}
+const ED_VN = 3, ED_AN = 2;
+const ED_VNAME = ['画面1', '画面2', '画面3'];
+const ED_ANAME = ['音频1', '音频2'];
+const edState = { id:null, dur:0, speed:1, muted:false, volume:1,
+  marks:[], pieces:[], sel:-1, focus:'v', playing:false, lastTick:0, cut:false };
+let edOpenId = null;
+let edDrag = null;
+let edPlayT = 0;              // 播放头（时间轴位置，单位=原片秒）
+let edUndo = [];              // 撤回栈：每一步操作前压一份快照（最多 60 步）
+let edCutGuide = null;        // 剪刀的预览切线（跟着鼠标走）
+
+const edVLen = (p) => Math.max(0, p.out - p.in);
+const edVEnd = (p) => p.t0 + edVLen(p);
+// 某一段的声音：有自己的位置/区间就用它自己的，否则跟着画面
+function edA(p) {
+  if (!p) return { aIn:0, aOut:0, aT0:0, len:0, end:0, mute:true, custom:false };
+  const own = Number.isFinite(p.aIn) && Number.isFinite(p.aOut) && p.aOut - p.aIn > 0.1;
+  const aIn = own ? p.aIn : p.in;
+  const aOut = own ? p.aOut : p.out;
+  const aT0 = Number.isFinite(p.aT0) ? p.aT0 : p.t0 + (own ? 0 : 0);
+  const len = Math.max(0, aOut - aIn);
+  return { aIn, aOut, aT0, len, end: aT0 + len, mute: !!p.aMute, custom: own || Number.isFinite(p.aT0) };
+}
+// 声音是否还「跟着画面走」（没单独拖过）
+function edLinked(p) {
+  const ownR = Number.isFinite(p.aIn) && Number.isFinite(p.aOut) && p.aOut - p.aIn > 0.1;
+  const ownT = Number.isFinite(p.aT0);
+  if (!ownR && !ownT) return true;
+  return (!ownT || Math.abs(p.aT0 - p.t0) < 0.02)
+    && (!ownR || (Math.abs(p.aIn - p.in) < 0.02 && Math.abs(p.aOut - p.out) < 0.02));
+}
+// 时间轴总长（源秒）；成片时长 = 这个 / 倍率
+function edT() {
+  let t = 0;
+  for (const p of edState.pieces) {
+    t = Math.max(t, edVEnd(p));
+    const a = edA(p);
+    if (!a.mute) t = Math.max(t, a.end);
+  }
+  return t;
+}
+function edOutDur() { return edT() / Math.max(0.1, edState.speed || 1); }
+function matFileUrl(id) {
+  const m = (project.materials || []).find((x) => x.id === id) || {};
+  return m.beauty ? `/api/projects/${PID}/materials/${id}/beauty`
+    : m.optimized ? `/api/projects/${PID}/materials/${id}/optimized`
+    : `/api/projects/${PID}/materials/${id}/file`;
+}
+// 面板里播的可能是美颜/优化副本（内部从 0 开始 = 原片 trimIn），源时间要整体平移
+function edOffset() {
+  const m = (project.materials || []).find((x) => x.id === edOpenId) || {};
+  const src = m.beauty || m.optimized;
+  return src && Number.isFinite(src.in) ? src.in : 0;
+}
+function edPiecesOf(m) {
+  const off = edOffset();
+  const dur = m.duration || 0;
+  const list = [];
+  if (Array.isArray(m.pieces) && m.pieces.length) {
+    for (const p of m.pieces) {
+      const tin = +p.in, tout = +p.out;
+      if (!(tout - tin > 0.2)) continue;
+      const q = {
+        in: Math.max(0, tin - off), out: Math.max(0.2, tout - off),
+        v: Math.min(ED_VN - 1, Math.max(0, Math.round(+(p.v || 0)))),
+        a: Math.min(ED_AN - 1, Math.max(0, Math.round(+(p.a || 0)))),
+        t0: Number.isFinite(+p.t0) ? +p.t0 : null,
+      };
+      const ai = +p.aIn, ao = +p.aOut;
+      if (Number.isFinite(ai) && Number.isFinite(ao) && ao - ai > 0.1) {
+        q.aIn = Math.max(0, ai - off); q.aOut = Math.max(0.1, ao - off);
+      }
+      if (Number.isFinite(+p.aT0)) q.aT0 = +p.aT0;
+      if (p.aMute) q.aMute = true;
+      list.push(q);
+    }
+  }
+  if (list.length) {
+    // 老数据没有 t0：按原片先后首尾相接排在第 1 条画面轨上（和以前行为一致）
+    if (list.some((q) => q.t0 === null)) {
+      const seq = list.slice().sort((a, b) => a.in - b.in);
+      let cur = 0;
+      for (const q of seq) { if (q.t0 === null) q.t0 = +cur.toFixed(3); cur = q.t0 + edVLen(q); }
+    }
+    return list.sort((a, b) => a.t0 - b.t0);
+  }
+  const tin = Number.isFinite(m.trimIn) ? m.trimIn : 0;
+  const tout = Number.isFinite(m.trimOut) ? m.trimOut : dur;
+  const a = Math.max(0, Math.min(tin - off, (dur || tout) - off));
+  const b = Math.max(0, Math.min(tout - off, (dur || tout) - off));
+  return [{ t0: 0, in: a, out: b > a + 0.2 ? b : (dur || a + 1), v: 0, a: 0 }];
+}
+function edEls() {
+  return {
+    v: document.getElementById('mev'), black: document.getElementById('me-black'),
+    marks: document.getElementById('memarks'),
+    ct: document.getElementById('mect'), dur: document.getElementById('medur'),
+    len: document.getElementById('melen'), sum: document.getElementById('mesum'),
+    muteAll: document.getElementById('me-mute-all'), vol: document.getElementById('me-vol'),
+    title: document.getElementById('mep-title'), panel: document.getElementById('mat-editor-panel'),
+    btns: document.getElementById('mep-btns'),
+  };
+}
+// 5 条轨的骨架（打开面板时建一次）
+function edBuildLanes() {
+  const host = document.getElementById('metimeline');
+  if (!host || host.dataset.built === '1') return;
+  const rows = [];
+  for (let l = ED_VN - 1; l >= 0; l--) {
+    rows.push(`<div class="me-lane" data-kind="v" data-lane="${l}">
+      <span class="me-track-label" title="${l === 0 ? '主轨：成片的基础画面' : '上层轨：盖住下面一层的画面'}">${ED_VNAME[l]}</span>
+      <div class="me-bar me-bar-v" data-kind="v" data-lane="${l}" onpointerdown="edBarDown(event,'v',${l})">
+        <div class="me-pieces" data-kind="v" data-lane="${l}"></div>
+        ${l === 0 ? '<div class="me-marks" id="memarks"></div>' : ''}
+        <div class="me-cursor"></div>
+      </div>
+    </div>`);
+  }
+  for (let l = 0; l < ED_AN; l++) {
+    rows.push(`<div class="me-lane" data-kind="a" data-lane="${l}">
+      <span class="me-track-label" title="声音轨：上层的出声会盖住下层">${ED_ANAME[l]}</span>
+      <div class="me-bar me-bar-audio" data-kind="a" data-lane="${l}" onpointerdown="edBarDown(event,'a',${l})">
+        <div class="me-pieces" data-kind="a" data-lane="${l}"></div>
+        <div class="me-cursor"></div>
+      </div>
+    </div>`);
+  }
+  host.innerHTML = rows.join('');
+  host.dataset.built = '1';
+}
+function edRenderPieces() {
+  const dur = edState.dur || 1;
+  document.querySelectorAll('#metimeline .me-pieces').forEach((box) => {
+    const kind = box.dataset.kind;
+    const lane = +box.dataset.lane;
+    const out = [];
+    edState.pieces.forEach((p, i) => {
+      const on = i === edState.sel;
+      if (kind === 'v') {
+        if (p.v !== lane) return;
+        const l = Math.max(0, (p.t0 / dur) * 100);
+        const w = Math.max(0.7, (edVLen(p) / dur) * 100);
+        out.push(`<div class="me-piece${on ? ' sel' : ''}" data-i="${i}" data-kind="v" style="left:${l}%;width:${w}%" title="第 ${i + 1} 段 · 原片 ${p.in.toFixed(1)}s→${p.out.toFixed(1)}s（按住拖走 / 上下换轨，拖两端改长度）">
+          <b class="me-pno">${i + 1}</b>
+          ${on ? '<span class="me-grip l"></span><span class="me-grip r"></span>' : ''}
+        </div>`);
+      } else {
+        const a = edA(p);
+        if (p.a !== lane || a.len <= 0.05) return;
+        const l = Math.max(0, (a.aT0 / dur) * 100);
+        const w = Math.max(0.7, (a.len / dur) * 100);
+        const sil = edState.muted || a.mute;
+        const tip = sil ? '静音' : (a.custom ? `声音 ${a.aIn.toFixed(1)}s→${a.aOut.toFixed(1)}s` : '声音跟随画面');
+        out.push(`<div class="me-piece me-piece-a${on ? ' sel' : ''}${sil ? ' mute' : ''}" data-i="${i}" data-kind="a" style="left:${l}%;width:${w}%" title="第 ${i + 1} 段 · ${tip}（按住拖走 / 上下换轨，拖两端改范围）">
+          <span class="me-wave"></span><b class="me-pno">${i + 1}</b>
+          ${on ? '<span class="me-grip l"></span><span class="me-grip r"></span>' : ''}
+        </div>`);
+      }
+    });
+    box.innerHTML = out.join('');
+  });
+  document.querySelectorAll('#metimeline .me-lane').forEach((el) => {
+    el.classList.toggle('act', el.dataset.kind === edState.focus);
+  });
+  edRenderMarks();
+}
+// ===== 标记：进度条上任意位置打点（拖可挪、点可跳、双击删）=====
+function edRenderMarks() {
+  const E = edEls();
+  const dur = edState.dur || 1;
+  if (E.marks) {
+    E.marks.innerHTML = edState.marks.map((t, i) => {
+      const p = Math.max(0, Math.min(100, (t / dur) * 100));
+      return `<div class="me-mark" style="left:${p}%" title="标记 ${i + 1} · ${t.toFixed(2)}s（拖动挪位置 / 双击删掉）" onpointerdown="edMarkDown(event,${i})" ondblclick="edDelMark(event,${i})"><i></i><b>${i + 1}</b></div>`;
+    }).join('');
+  }
+  const clr = document.getElementById('me-clear-marks');
+  if (clr) {
+    clr.style.display = edState.marks.length ? '' : 'none';
+    clr.textContent = `清除标记（${edState.marks.length}）`;
+  }
+}
+async function edAddMark() {
+  const E = edEls(); if (!E.v || !edOpenId) return;
+  const dur = edState.dur; if (!dur) return;
+  const t = +Math.max(0, Math.min(dur, edPlayT)).toFixed(2);
+  if (edState.marks.some((x) => Math.abs(x - t) < 0.08)) { toast('这个位置已经有标记了'); return; }
+  if (edState.marks.length >= 100) { toast('标记最多 100 个，先清掉一些'); return; }
+  edPushUndo('打标记');
+  edState.marks.push(t);
+  edState.marks.sort((a, b) => a - b);
+  edRenderMarks();
+  await edSaveTrim();
+  toast(`已标记 ${t.toFixed(2)}s（共 ${edState.marks.length} 个）`);
+}
+async function edDelMark(ev, i) {
+  if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+  if (!edOpenId) return;
+  if (!Number.isInteger(i) || i < 0 || i >= edState.marks.length) return;
+  edPushUndo('删除标记');
+  edState.marks.splice(i, 1);
+  edRenderMarks();
+  await edSaveTrim();
+  toast('已删掉这个标记');
+}
+async function edClearMarks() {
+  if (!edOpenId || !edState.marks.length) return;
+  if (!confirm(`要清掉全部 ${edState.marks.length} 个标记吗？`)) return;
+  edPushUndo('清除标记');
+  edState.marks = [];
+  edRenderMarks();
+  await edSaveTrim();
+  toast('标记已全部清除');
+}
+function edMarkDown(ev, i) {
+  if (!edOpenId) return;
+  if (edState.cut) return;                       // 剪刀模式下不拖标记
+  const bar = document.querySelector('#metimeline .me-bar[data-kind="v"][data-lane="0"]');
+  if (!bar) return;
+  const dur = edState.dur; if (!dur) return;
+  ev.preventDefault(); ev.stopPropagation();
+  edDrag = { mode:'mark', i, startX:ev.clientX, startY:ev.clientY, moved:false, rect:bar.getBoundingClientRect(), dur, snap:edSnap() };
+}
+// ===== 打开 / 关闭面板 =====
+function openMatEditor(id) {
+  const E = edEls(); if (!E.panel) return;
+  if (edOpenId === id) { closeMatEditor(); return; }
+  const m = (project.materials || []).find((x) => x.id === id); if (!m) return;
+  if (E.v) E.v.pause();
+  edBuildLanes();
+  edOpenId = id;
+  edUndo = [];                                  // 换素材：撤回栈重新开始
+  edState.cut = false;                          // 剪刀不跟着带到下一条素材
+  edHideCut();
+  const tl = document.getElementById('metimeline');
+  if (tl) tl.classList.remove('cut-mode');
+  edState.id = id;
+  edState.dur = m.duration || 0;
+  edState.speed = Number(m.speed) > 0 ? Number(m.speed) : 1;
+  edState.muted = !!m.muted;
+  edState.volume = Number.isFinite(m.volume) ? Number(m.volume) : 1;
+  edState.pieces = edPiecesOf(m);
+  edState.sel = edState.pieces.length ? 0 : -1;
+  edState.focus = 'v';
+  edState.playing = false;
+  edState.marks = (Array.isArray(m.marks) ? m.marks : [])
+    .map((t) => +Math.max(0, Number(t) - edOffset())).filter((t) => Number.isFinite(t)).sort((a, b) => a - b);
+  edPlayT = edState.pieces.length ? edState.pieces[0].t0 : 0;
+  E.panel.style.display = 'block';
+  E.title.textContent = `手动剪辑 · №${matNoMap[id] || ''} ${(m.name || m.originalName || '').slice(0, 24)}`;
+  E.v.onloadedmetadata = () => {
+    edState.dur = E.v.duration || edState.dur;
+    const dur = edState.dur;
+    // 源片变短了（换了副本/重新生成）→ 片段就地夹回来
+    edState.pieces = edState.pieces.map((p) => {
+      const q = Object.assign({}, p);
+      q.in = Math.max(0, Math.min(p.in, Math.max(0, dur - 0.3)));
+      q.out = Math.min(dur, Math.max(p.out, q.in + 0.3));
+      if (Number.isFinite(q.aIn)) q.aIn = Math.max(0, Math.min(q.aIn, dur - 0.1));
+      if (Number.isFinite(q.aOut)) q.aOut = Math.min(dur, Math.max(q.aOut, 0.2));
+      return q;
+    }).filter((p) => p.out - p.in > 0.2);
+    if (!edState.pieces.length) edState.pieces = [{ t0:0, in:0, out:dur, v:0, a:0 }];
+    edState.marks = edState.marks.filter((t) => t <= dur + 0.05).map((t) => +Math.max(0, Math.min(t, dur)).toFixed(3));
+    if (edState.sel >= edState.pieces.length) edState.sel = edState.pieces.length - 1;
+    E.v.playbackRate = edState.speed;
+    edRenderPieces();
+    // 直接定位到第一段要用的画面（否则停在第 0 帧，可能是黑帧）
+    edSeekTo(Math.min(edPlayT, edT() || edPlayT));
+    syncEditorBtns();
+  };
+  E.v.ontimeupdate = () => { if (E.v.paused) edPaint(); };
+  E.v.onplay = () => syncPlayBtn(true);
+  E.v.onpause = () => syncPlayBtn(false);
+  E.v.src = matFileUrl(id) + (window.__matBust ? '?t=' + window.__matBust : '');
+  syncEditorBtns();
+  edRenderPieces(); edPaint();
+  document.querySelectorAll('.media-click.editing').forEach((el) => el.classList.remove('editing'));
+  const card = document.getElementById('mat-card-' + id);
+  if (card) { const mc = card.querySelector('.media-click'); if (mc) mc.classList.add('editing'); }
+  E.panel.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+function closeMatEditor() {
+  const E = edEls();
+  edPause();
+  if (E.v) { E.v.pause(); E.v.removeAttribute('src'); E.v.load(); }
+  edOpenId = null; edState.id = null;
+  edUndo = []; edState.cut = false; edHideCut();
+  const tl = document.getElementById('metimeline');
+  if (tl) tl.classList.remove('cut-mode');
+  if (E.black) E.black.style.display = 'none';
+  if (E.panel) E.panel.style.display = 'none';
+  document.querySelectorAll('.media-click.editing').forEach((el) => el.classList.remove('editing'));
+}
+// 保存替换原素材：把当前剪辑烘焙成新视频顶替原片（原片备份 .bak），并刷新预览
+async function edSaveReplace() {
+  if (!edOpenId) return;
+  if (!confirm('将把当前剪辑（片段/变速/音量/静音）渲染成新视频并替换该素材原片。\n原片会自动备份为 .bak 文件，可手动恢复。\n（若该素材之前做过美颜/优化，会一并按新剪辑重来。）\n确认替换？')) return;
+  const btn = document.getElementById('mep-save-replace');
+  const oldTxt = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '导出中…'; }
+  try {
+    await edSaveTrim();                              // 先把最新片段落库
+    const saved = await API.post(`/api/projects/${PID}/materials/${edOpenId}/export-trim`, {});
+    const m = (project.materials || []).find((x) => x.id === edOpenId);
+    if (m && saved) Object.assign(m, saved);        // 用服务端返回覆盖本地（duration/pieces/文件名等）
+    window.__matBust = Date.now();                   // 让预览视频强制刷新，避免浏览器缓存旧片
+    await refreshProject();
+    toast('已保存并替换原素材（原片备份：' + (saved.trimBackup || '原片.bak') + '）。可继续剪辑，再次「保存替换」或「另存为新素材」都可以');
+    openMatEditor(edOpenId);                          // 重新打开，载入新视频
+  } catch (e) {
+    toast('替换失败：' + (e.message || e));
+    if (btn) { btn.disabled = false; btn.textContent = oldTxt; }
+  }
+}
+// 另存为新素材：把当前剪辑烘焙成一条全新素材（原素材不动）。长素材可反复改截取点另存成多条，
+// 新素材走与上传一致的分析流，到「② 一次修改」设置分类并标记完成后即可参与美颜/字幕/混剪
+async function edSaveAs() {
+  if (!edOpenId) return;
+  if (!confirm('将把当前剪辑（片段/变速/音量/静音）渲染成一条新素材。\n原素材保持不变；新素材会自动分析，到「② 一次修改」分类并标记完成后即可参与混剪。\n继续？')) return;
+  const btn = document.getElementById('mep-save-as');
+  const oldTxt = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '导出中…'; }
+  try {
+    await edSaveTrim();                              // 先把最新片段落库
+    const saved = await API.post(`/api/projects/${PID}/materials/${edOpenId}/save-as`, {});
+    await refreshProject();                          // 素材列表/各步骤计数一起刷新
+    toast('已另存为新素材：' + (saved.originalName || saved.filename) + '，分析完成后到「② 一次修改」分类');
+  } catch (e) {
+    toast('另存失败：' + (e.message || e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = oldTxt; }
+  }
+}
+function syncPlayBtn(playing) {
+  const b = document.getElementById('mep-play'); if (b) b.textContent = playing ? '⏸ 暂停' : '▶ 播放';
+}
+function syncEditorBtns() {
+  const E = edEls(); if (!E.btns || !edOpenId) return;
+  const m = (project.materials || []).find((x) => x.id === edOpenId); if (!m) return;
+  const opts = ED_SPEEDS.map((s) => `<option value="${s}"${Math.abs(s - edState.speed) < 0.001 ? ' selected' : ''}>${s}x</option>`).join('');
+  const p = edState.pieces[edState.sel];
+  const a = p ? edA(p) : { mute:false };
+  const top = edUndo[edUndo.length - 1];
+  E.btns.innerHTML = `
+    <button class="btn btn-sm btn-primary" id="mep-play" onclick="edPlay()">${edState.playing ? '⏸ 暂停' : '▶ 播放'}</button>
+    <button class="btn btn-sm${edState.cut ? ' on' : ''}" id="mep-scissor" onclick="edToggleCut()" title="剪刀：打开后直接点画面轨 / 音频轨上任意位置，就地切开那一段（快捷键 C，Esc 关掉）">✂ 剪刀${edState.cut ? ' ✓' : ''}</button>
+    <button class="btn btn-sm" onclick="edSplit()" title="在播放头位置把选中的片段切成两段">在播放处分割</button>
+    <button class="btn btn-sm" id="mep-undo" onclick="edUndoStep()"${top ? '' : ' disabled'} title="${top ? `撤回「${esc(top.label)}」（Ctrl+Z），还可以退 ${edUndo.length} 步` : '还没有可以撤回的操作'}">↩ 撤回${top ? `：${esc(top.label)}` : ''}</button>
+    <button class="btn btn-sm" onclick="edDelPiece()" title="删掉选中的片段（画面+声音），后面同一轨的片段自动往前接上；也可以按 Delete">删除本段</button>
+    <button class="btn btn-sm" onclick="edMutePiece()" title="只去掉这一段的声音，画面保留">${a.mute ? '恢复本段声音' : '静音本段'}</button>
+    <button class="btn btn-sm" onclick="edAddMark()" title="在播放头位置打一个标记（快捷键 M）；也可以按住 Shift 点进度条任意位置直接标记">＋ 标记</button>
+    <button class="btn btn-sm" id="me-clear-marks" style="display:none" onclick="edClearMarks()">清除标记</button>
+    <button class="btn btn-sm" onclick="edReset()">恢复原片</button>
+    <button class="btn btn-sm btn-primary" id="mep-save-replace" onclick="edSaveReplace()" title="把当前剪辑（片段/变速/音量/静音）渲染成新视频，替换这条素材本身；原片会备份为 .bak 文件">💾 保存替换原素材</button>
+    <button class="btn btn-sm btn-primary" id="mep-save-as" onclick="edSaveAs()" title="把当前剪辑另存为一条新素材，原素材保持不变；新素材出现在素材列表，可重新分类、剪辑、混剪">✂️ 另存为新素材</button>
+    <label class="field ed-speed-field" style="min-width:0;margin:0">
+      <span>速度</span>
+      <select id="ed-speed" onchange="edSetSpeed(this.value)">${opts}</select>
+    </label>
+    <button class="btn btn-sm" onclick="edRename()">✎ 重命名</button>
+    <button class="btn btn-sm btn-danger" onclick="edDelete()">删除素材</button>
+    ${m.optimized ? '<span class="muted" style="font-size:10.5px;align-self:center">已生成优化/美颜版本，改截取点后到下一步重新生成即可生效。</span>' : ''}`;
+  syncUndoBtn();
+}
+// ===== 预览：播放头 → 取最上层那条画面轨的画面 =====
+function edPieceAt(t, lane) {
+  for (const p of edState.pieces) {
+    if (p.v === lane && t >= p.t0 - 0.001 && t < edVEnd(p) - 0.001) return p;
+  }
+  return null;
+}
+function edTopAt(t) {
+  for (let l = ED_VN - 1; l >= 0; l--) { const p = edPieceAt(t, l); if (p) return p; }
+  return null;
+}
+function edSrcAt(t) {
+  const p = edTopAt(t);
+  return p ? { p, src: p.in + (t - p.t0) } : null;
+}
+function edPaint() {
+  const E = edEls();
+  const dur = edState.dur || 1;
+  const pct = Math.max(0, Math.min(100, (edPlayT / dur) * 100));
+  document.querySelectorAll('#metimeline .me-cursor').forEach((el) => { el.style.left = pct + '%'; });
+  const cur = edSrcAt(edPlayT);
+  if (E.black) E.black.style.display = cur ? 'none' : 'block';
+  // 听到的和看到的来自同一时刻：最上层那一段的声音决定此刻有没有声
+  if (E.v) {
+    const p = cur ? cur.p : null;
+    const sil = !p || edState.muted || edA(p).mute;
+    if (E.v.muted !== sil) E.v.muted = sil;
+    // 挂了 Web Audio 增益后：放大交给增益（>100% 的部分），element.volume 只管 ≤100% 的衰减，两者相乘别叠加
+    if (edAudio) edAudio.gain.gain.value = Math.max(1, edState.volume);
+    const vol = edAudio ? 1 : Math.min(1, edState.volume);
+    if (!sil && Math.abs((E.v.volume || 1) - vol) > 0.01) E.v.volume = vol;
+  }
+  if (E.ct) E.ct.textContent = (edPlayT / Math.max(0.1, edState.speed)).toFixed(1) + 's';
+  if (E.dur) E.dur.textContent = edOutDur().toFixed(1) + 's';
+  if (E.vol) E.vol.value = String(edState.volume);
+  if (E.muteAll) {
+    E.muteAll.textContent = edState.muted ? '已静音' : '有声';
+    E.muteAll.classList.toggle('on', edState.muted);
+  }
+  if (E.len) E.len.textContent = edOutDur().toFixed(1) + 's';
+  if (E.sum) {
+    const n = edState.pieces.length;
+    const filled = edState.pieces.reduce((s, p) => s + edVLen(p), 0);
+    const total = edT();
+    const gap = Math.max(0, total - filled);
+    const sp = edState.speed !== 1 ? ` · 速度 ${edState.speed}x` : '';
+    const sil = edState.muted ? ' · 音频已静音' : (edState.pieces.some((p) => edA(p).mute) ? ' · 部分静音' : '');
+    E.sum.innerHTML = `${n} 段${gap > 0.15 ? ` · 空隙 ${(gap / Math.max(0.1, edState.speed)).toFixed(1)}s（黑场）` : ''}${sp}${sil}`;
+  }
+}
+function edSeekTo(t) {
+  const E = edEls();
+  const dur = edState.dur || 0;
+  edPlayT = Math.max(0, Math.min(t, dur || t));
+  const cur = edSrcAt(edPlayT);
+  if (E.v && cur) E.v.currentTime = Math.max(0, Math.min((edState.dur || cur.src) - 0.03, cur.src));
+  edPaint();
+}
+function edSeekAt(ev, rect, dur) {
+  const ratio = Math.min(1, Math.max(0, (ev.clientX - rect.left) / (rect.width || 1)));
+  edSeekTo(ratio * dur);
+}
+function edPause() {
+  const E = edEls();
+  edState.playing = false;
+  if (edState.raf) { cancelAnimationFrame(edState.raf); edState.raf = null; }
+  if (E.v && !E.v.paused) E.v.pause();
+  syncPlayBtn(false);
+}
+function edPlay() {
+  const E = edEls(); if (!E.v || !edOpenId) return;
+  // 播放点击也是手势：素材自带 >100% 音量、或音频图还挂起时，在这里兜底恢复
+  if (edState.volume > 1 || edAudio) edBoostEnsure(edState.volume);
+  if (edState.playing) { edPause(); edPaint(); return; }
+  const T = edT();
+  if (edPlayT >= T - 0.02) edPlayT = 0;
+  edState.playing = true;
+  edState.lastTick = performance.now();
+  syncPlayBtn(true);
+  const cur = edSrcAt(edPlayT);
+  if (cur) {
+    E.v.currentTime = Math.max(0, Math.min((edState.dur || cur.src) - 0.03, cur.src));
+    E.v.playbackRate = edState.speed;
+    E.v.play().catch(() => {});
+  }
+  edState.raf = requestAnimationFrame(edLoop);
+}
+function edLoop() {
+  if (!edState.playing) return;
+  const E = edEls();
+  const T = Math.max(0.1, edT());
+  const now = performance.now();
+  const dt = Math.min(0.3, (now - edState.lastTick) / 1000);
+  edState.lastTick = now;
+  const cur = edSrcAt(edPlayT);
+  if (!cur) {
+    // 空隙（黑场）：视频暂停，时间轴照常往前走
+    if (E.v && !E.v.paused) E.v.pause();
+    edPlayT += dt * (edState.speed || 1);
+  } else if (!E.v || E.v.paused) {
+    if (E.v) {
+      E.v.currentTime = Math.max(0, Math.min((edState.dur || cur.src) - 0.03, cur.src));
+      E.v.playbackRate = edState.speed;
+      E.v.play().catch(() => {});
+    }
+    edPlayT += dt * (edState.speed || 1);
+  } else {
+    E.v.playbackRate = edState.speed;
+    const drift = E.v.currentTime - cur.src;
+    if (Math.abs(drift) > 0.3) {
+      E.v.currentTime = Math.max(0, Math.min((edState.dur || cur.src) - 0.03, cur.src));
+    } else {
+      // 画面在放的时候以视频时间为准，时间轴跟着走，不会越拖越偏
+      edPlayT = cur.p.t0 + (E.v.currentTime - cur.p.in);
+    }
+    if (E.v.currentTime >= cur.p.out - 0.02) {
+      // 这一段播完：跨到下一个时间点（下一段或空隙）
+      E.v.pause();
+      edPlayT = edVEnd(cur.p) + 0.002;
+      edState.lastTick = performance.now();
+    }
+  }
+  if (edPlayT >= T - 0.005) { edPause(); edPlayT = T; edPaint(); return; }
+  edPaint();
+  edState.raf = requestAnimationFrame(edLoop);
+}
+// ===== 拖动 =====
+function edLaneAt(clientY, kind) {
+  const lanes = [...document.querySelectorAll(`#metimeline .me-bar[data-kind="${kind}"]`)];
+  let best = 0, bd = Infinity;
+  for (const el of lanes) {
+    const r = el.getBoundingClientRect();
+    const d = Math.abs(clientY - (r.top + r.height / 2));
+    if (d < bd) { bd = d; best = +el.dataset.lane; }
+  }
+  return best;
+}
+function edBarDown(ev, kind, lane) {
+  if (!edOpenId) return;
+  const bar = ev.currentTarget;
+  const dur = edState.dur; if (!dur) return;
+  ev.preventDefault();
+  const rect = bar.getBoundingClientRect();
+  // 剪刀模式：点哪切哪（不跳播、不拖动）
+  if (edState.cut) {
+    const pt = edCutPoint(ev, bar);
+    if (!pt) { toast('视频还在加载，稍等一秒再剪'); return; }
+    edCutAt(kind, lane, pt.t);
+    return;
+  }
+  // Shift + 点画面轨 = 直接在这个位置打标记
+  if (ev.shiftKey && kind === 'v') {
+    edSeekAt(ev, rect, dur);
+    edAddMark();
+    return;
+  }
+  const grip = ev.target.closest ? ev.target.closest('.me-grip') : null;
+  const pEl = ev.target.closest ? ev.target.closest('.me-piece') : null;
+  const i = pEl ? +pEl.dataset.i : -1;
+  edState.focus = kind;
+  if (i >= 0) {
+    edState.sel = i;
+    const p = edState.pieces[i];
+    edDrag = {
+      mode: grip ? ('trim:' + (grip.classList.contains('l') ? 'in' : 'out')) : 'move',
+      i, kind, lane, startX:ev.clientX, startY:ev.clientY, moved:false,
+      rect, dur, orig:Object.assign({}, p), origA:edA(p), linked:edLinked(p),
+      snap: edSnap(),                                   // 拖动前的样子，松手后压进撤回栈
+      snapLabel: grip ? '改片段长度' : (kind === 'a' ? '挪动声音' : '挪动片段'),
+    };
+    edRenderPieces(); syncEditorBtns();
+  } else {
+    edDrag = { mode:'seek', i:-1, kind, lane, startX:ev.clientX, startY:ev.clientY, moved:false, rect, dur };
+    edSeekAt(ev, rect, dur);
+    edRenderPieces();
+  }
+  edPaint();
+}
+function edDragMove(ev) {
+  if (!edDrag) return;
+  const d = edDrag;
+  const dx = ev.clientX - d.startX, dy = ev.clientY - d.startY;
+  if (!d.moved) {
+    if (Math.abs(dx) < 3 && Math.abs(dy) < 3) return;
+    d.moved = true;
+    edPause();
+  }
+  const dt = (dx / (d.rect.width || 1)) * d.dur;
+  if (d.mode === 'mark') {
+    const t = Math.max(0, Math.min(d.dur, ((ev.clientX - d.rect.left) / (d.rect.width || 1)) * d.dur));
+    edState.marks[d.i] = +t.toFixed(3);
+    edRenderMarks();
+    return;
+  }
+  if (d.mode === 'seek') { edSeekAt(ev, d.rect, d.dur); return; }
+  const p = edState.pieces[d.i]; if (!p) return;
+  const o = d.orig, oa = d.origA;
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(v, hi));
+  if (d.mode === 'move') {
+    if (d.kind === 'a') {
+      // 声音块：横向挪位置 + 竖向换音轨
+      p.a = edLaneAt(ev.clientY, 'a');
+      p.aIn = oa.aIn; p.aOut = oa.aOut;
+      p.aT0 = +clamp(oa.aT0 + dt, 0, Math.max(0, d.dur - oa.len)).toFixed(3);
+      edSeekTo(p.aT0);
+    } else {
+      // 画面块：横向自由摆放（不推邻居）+ 竖向换画面轨
+      p.v = edLaneAt(ev.clientY, 'v');
+      const len = edVLen(o);
+      p.t0 = +clamp(o.t0 + dt, 0, Math.max(0, d.dur - len)).toFixed(3);
+      p.in = o.in; p.out = o.out;
+      if (d.linked) { delete p.aT0; delete p.aIn; delete p.aOut; }
+      edSeekTo(p.t0);
+    }
+  } else if (d.mode === 'trim:in') {
+    if (d.kind === 'a') {
+      const aIn = +clamp(oa.aIn + dt, 0, oa.aOut - 0.3).toFixed(3);
+      const shift = aIn - oa.aIn;
+      p.aIn = aIn; p.aOut = oa.aOut;
+      p.aT0 = +Math.max(0, oa.aT0 + shift).toFixed(3);
+      edSeekTo(p.aT0);
+    } else {
+      const nin = +clamp(o.in + dt, 0, o.out - 0.3).toFixed(3);
+      const shift = nin - o.in;
+      p.in = nin; p.out = o.out;
+      p.t0 = +Math.max(0, o.t0 + shift).toFixed(3);
+      if (d.linked) { delete p.aT0; delete p.aIn; delete p.aOut; }
+      edSeekTo(p.t0);
+    }
+  } else if (d.mode === 'trim:out') {
+    if (d.kind === 'a') {
+      p.aIn = oa.aIn;
+      p.aOut = +clamp(oa.aOut + dt, oa.aIn + 0.3, d.dur).toFixed(3);
+      p.aT0 = oa.aT0;
+      edSeekTo(p.aT0 + Math.max(0, p.aOut - p.aIn) - 0.05);
+    } else {
+      p.in = o.in;
+      p.out = +clamp(o.out + dt, o.in + 0.3, d.dur).toFixed(3);
+      p.t0 = o.t0;
+      if (d.linked) { delete p.aT0; delete p.aIn; delete p.aOut; }
+      edSeekTo(edVEnd(p) - 0.05);
+    }
+  }
+  edRenderPieces(); edPaint();
+}
+document.addEventListener('pointermove', (e) => {
+  if (edDrag) { edDragMove(e); return; }
+  if (edState.cut && edOpenId) edCutHover(e);
+});
+document.addEventListener('pointerup', (e) => {
+  if (!edDrag) return;
+  const d = edDrag;
+  edDrag = null;
+  if (d.mode === 'mark') {
+    if (d.moved) {
+      edPushSnap(d.snap, '挪动标记');
+      edState.marks = edState.marks.map((t) => +t.toFixed(3)).sort((a, b) => a - b);
+      edRenderMarks(); edSaveTrim();
+    } else {
+      edSeekTo(edState.marks[d.i] || 0);
+    }
+    return;
+  }
+  if (d.moved) { edPushSnap(d.snap, d.snapLabel); edSaveTrim(); return; }
+  if (d.mode !== 'seek') edSeekAt(e, d.rect, d.dur);
+});
+// ===== 保存 =====
+async function edSaveTrim() {
+  if (!edOpenId) return;
+  const off = edOffset();
+  const pieces = edState.pieces
+    .map((p) => {
+      const o = {
+        t0: +Math.max(0, p.t0).toFixed(2),
+        in: +(p.in + off).toFixed(2),
+        out: +(p.out + off).toFixed(2),
+        v: Math.min(ED_VN - 1, Math.max(0, p.v | 0)),
+        a: Math.min(ED_AN - 1, Math.max(0, p.a | 0)),
+      };
+      const a = edA(p);
+      // 声音单独拖过/截过才落库，否则成片里自动跟随画面
+      if (!edLinked(p)) {
+        o.aIn = +(a.aIn + off).toFixed(2);
+        o.aOut = +(a.aOut + off).toFixed(2);
+        o.aT0 = +Math.max(0, a.aT0).toFixed(2);
+      }
+      if (p.aMute) o.aMute = true;
+      return o;
+    })
+    .filter((p) => p.out - p.in > 0.2)
+    .sort((a, b) => a.t0 - b.t0);
+  const marks = edState.marks
+    .map((t) => +(t + off).toFixed(2))
+    .filter((t) => Number.isFinite(t))
+    .sort((a, b) => a - b)
+    .filter((t, i, arr) => i === 0 || t - arr[i - 1] >= 0.08);
+  try {
+    const saved = await API.patch(`/api/projects/${PID}/materials/${edOpenId}`,
+      { pieces, speed:edState.speed, muted:edState.muted, volume:edState.volume, marks });
+    const m = (project.materials || []).find((x) => x.id === edOpenId);
+    if (m) {
+      m.pieces = saved && Array.isArray(saved.pieces) ? saved.pieces : (pieces.length ? pieces : undefined);
+      m.speed = saved && saved.speed ? saved.speed : edState.speed;
+      m.muted = saved && saved.muted !== undefined ? !!saved.muted : edState.muted;
+      if (saved && Number.isFinite(saved.volume)) m.volume = saved.volume;
+      if (typeof saved.trimIn === 'number') m.trimIn = saved.trimIn;
+      if (typeof saved.trimOut === 'number') m.trimOut = saved.trimOut;
+      if (Array.isArray(saved.marks)) m.marks = saved.marks; else delete m.marks;
+    }
+    renderInspect();
+  } catch (e) { toast('保存失败：' + e.message); }
+}
+// ===== 撤回上一步（Ctrl+Z）=====
+// 每次改动前把「片段 / 速度 / 静音 / 音量 / 标记 / 选中位置」整份压栈，撤回时整份还原再存一次。
+// 栈里最多留 60 步，可以连着按 Ctrl+Z 一路退。
+function edSnap() {
+  return {
+    pieces: edState.pieces.map((p) => Object.assign({}, p)),
+    speed: edState.speed, muted: edState.muted, volume: edState.volume,
+    marks: edState.marks.slice(), sel: edState.sel, playT: edPlayT,
+  };
+}
+function edSetFromSnap(s) {
+  if (!s) return;
+  edState.pieces = s.pieces.map((p) => Object.assign({}, p));
+  edState.speed = s.speed; edState.muted = s.muted; edState.volume = s.volume;
+  edState.marks = s.marks.slice();
+  edState.sel = Math.max(-1, Math.min(s.sel, edState.pieces.length - 1));
+  edPlayT = Math.max(0, Math.min(s.playT || 0, edT() || (s.playT || 0)));
+}
+function edPushSnap(snap, label) {
+  if (!edOpenId || !snap) return;
+  edUndo.push({ label: label || '操作', snap });
+  if (edUndo.length > 60) edUndo.shift();
+  syncUndoBtn();
+}
+function edPushUndo(label) { edPushSnap(edSnap(), label); }
+function syncUndoBtn() {
+  const b = document.getElementById('mep-undo'); if (!b) return;
+  const top = edUndo[edUndo.length - 1];
+  b.disabled = !top;
+  b.title = top ? `撤回「${top.label}」（Ctrl+Z），还可以退 ${edUndo.length} 步` : '还没有可以撤回的操作';
+  b.textContent = top ? `↩ 撤回：${top.label}` : '↩ 撤回';
+}
+// 连按 Ctrl+Z 时排队执行，避免两次保存交叉、后端存成更早的那一份
+let edUndoQ = Promise.resolve();
+function edUndoStep() {
+  edUndoQ = edUndoQ.then(() => edUndoOne()).catch(() => {});
+  return edUndoQ;
+}
+async function edUndoOne() {
+  if (!edOpenId) return false;
+  const it = edUndo.pop();
+  if (!it) { toast('没有可以撤回的操作了'); syncUndoBtn(); return false; }
+  edPause();
+  edSetFromSnap(it.snap);
+  const E = edEls(); if (E.v) E.v.playbackRate = edState.speed;
+  edRenderPieces(); edPaint(); syncEditorBtns();
+  await edSaveTrim();
+  toast(`已撤回：${it.label}`);
+  return true;
+}
+// ===== 剪刀：直接点时间轴（画面轨 / 音频轨都行）就地切开 =====
+function edToggleCut() {
+  edState.cut = !edState.cut;
+  if (!edState.cut) edHideCut();
+  const tl = document.getElementById('metimeline');
+  if (tl) tl.classList.toggle('cut-mode', edState.cut);
+  syncEditorBtns();
+  if (edState.cut) toast('剪刀已打开：点画面轨或音频轨上任意位置就地切开（再按 C 或 Esc 关掉）');
+}
+// 鼠标位置 → 时间轴时间（5px 内吸附到片段边界 / 标记，免得切出 0.05 秒的碎渣）
+function edCutPoint(ev, bar) {
+  const dur = edState.dur || 0; if (!dur) return null;
+  const rect = bar.getBoundingClientRect();
+  if (!rect.width) return null;
+  const px = Math.max(0, Math.min(rect.width, ev.clientX - rect.left));
+  const raw = (px / rect.width) * dur;
+  const tol = (5 / rect.width) * dur;
+  let best = null, bd = Infinity;
+  const cand = [];
+  for (const p of edState.pieces) {
+    cand.push(p.t0, edVEnd(p));
+    const a = edA(p);
+    if (!a.mute && a.len > 0.05) cand.push(a.aT0, a.end);
+  }
+  for (const t of edState.marks) cand.push(t);
+  for (const c of cand) { const d = Math.abs(c - raw); if (d < bd) { bd = d; best = c; } }
+  const t = bd <= tol ? best : raw;
+  return { t: +Math.max(0, Math.min(dur, t)).toFixed(3) };
+}
+// 这个位置上、这条轨里，哪一段可以切
+function edCutTarget(kind, lane, t) {
+  for (const p of edState.pieces) {
+    if (kind === 'v') {
+      if (p.v === lane && t > p.t0 + 0.02 && t < edVEnd(p) - 0.02) return p;
+    } else {
+      if (p.a !== lane) continue;
+      const a = edA(p);
+      if (a.mute || a.len <= 0.05) continue;
+      if (t > a.aT0 + 0.02 && t < a.end - 0.02) return p;
+    }
+  }
+  return null;
+}
+// 这一段能不能在这个位置切开（预览线和真剪用同一套判断，不会出现“看着能切、点了不行”）
+function edCutCheck(p, t) {
+  const cut = t - p.t0, len = edVLen(p);
+  if (!(cut >= 0.25 && len - cut >= 0.25)) return 'edge';
+  const a = edA(p);
+  if (!a.mute && !edLinked(p)) {
+    const acut = t - a.aT0;
+    if (!(acut >= 0.25 && a.len - acut >= 0.25)) return 'audio';
+  }
+  return null;
+}
+function edHideCut() { if (edCutGuide) edCutGuide.style.display = 'none'; }
+function edCutHover(ev) {
+  const bar = ev.target && ev.target.closest ? ev.target.closest('#metimeline .me-bar') : null;
+  if (!bar) { edHideCut(); return; }
+  const pt = edCutPoint(ev, bar);
+  if (!pt) { edHideCut(); return; }
+  if (!edCutGuide) {
+    edCutGuide = document.createElement('div');
+    edCutGuide.className = 'me-cutline';
+    edCutGuide.innerHTML = '<b></b>';
+    document.body.appendChild(edCutGuide);
+  }
+  const rect = bar.getBoundingClientRect();
+  const dur = edState.dur || 1;
+  const hit = edCutTarget(bar.dataset.kind, +bar.dataset.lane, pt.t);
+  edCutGuide.style.display = 'block';
+  edCutGuide.style.left = (rect.left + (pt.t / dur) * rect.width) + 'px';
+  edCutGuide.style.top = (rect.top - 7) + 'px';
+  edCutGuide.style.height = (rect.height + 14) + 'px';
+  edCutGuide.classList.toggle('bad', !hit || !!edCutCheck(hit, pt.t));
+  edCutGuide.querySelector('b').textContent = pt.t.toFixed(2) + 's';
+}
+// 把片段 p 在时间轴 t 处切成两半，返回新的右半段（p 本身被改短）；两边都至少留 0.25 秒
+function edSplitPiece(p, t) {
+  const err = edCutCheck(p, t);
+  if (err) return { err };
+  const cut = t - p.t0;
+  const a = edA(p);
+  const right = Object.assign({}, p, { t0: +t.toFixed(3), in: +(p.in + cut).toFixed(3) });
+  delete right.aIn; delete right.aOut; delete right.aT0;
+  if (!a.mute && !edLinked(p)) {
+    // 声音被单独拖过：按声音自己的区间分；切点不在声音里就不切，否则会凭空长出声音
+    const acut = t - a.aT0;
+    p.aIn = a.aIn; p.aOut = +(a.aIn + acut).toFixed(3); p.aT0 = a.aT0;
+    right.aIn = +(a.aIn + acut).toFixed(3); right.aOut = a.aOut; right.aT0 = +t.toFixed(3);
+  }
+  p.out = +(p.in + cut).toFixed(3);
+  return { right };
+}
+function edCutErrMsg(err) {
+  return err === 'audio'
+    ? '这一段的声音单独拖过，切点不在声音范围里；把声音拖回来对齐再切'
+    : '切点离这一段两头太近，两边各留 0.25 秒以上再切';
+}
+async function edCutAt(kind, lane, t) {
+  const p = edCutTarget(kind, lane, t);
+  if (!p) {
+    toast(kind === 'a' ? '这个位置没有声音块可切（切点要落在有声音的片段上）' : '这个位置没有画面片段可切');
+    return;
+  }
+  if (kind === 'a' && (t <= p.t0 + 0.02 || t >= edVEnd(p) - 0.02)) {
+    toast('这段声音已经拖到画面之外了，画面切不开；请到画面轨上剪'); return;
+  }
+  const snap = edSnap();
+  const r = edSplitPiece(p, t);
+  if (r.err) { edSetFromSnap(snap); toast(edCutErrMsg(r.err)); return; }
+  edPushSnap(snap, '剪切');
+  edState.pieces.push(r.right);
+  edState.pieces.sort((x, y) => x.t0 - y.t0);
+  edState.sel = edState.pieces.indexOf(r.right);
+  edState.focus = kind;
+  edSeekTo(t);
+  edRenderPieces(); edPaint(); syncEditorBtns();
+  await edSaveTrim();
+  toast(`已在 ${t.toFixed(2)}s 切开 · 选中第 ${edState.sel + 1} 段，不要的那半段按 Delete 删掉`);
+}
+document.addEventListener('pointerleave', edHideCut);
+// 快捷键：空格 = 播放/暂停；Delete / Backspace = 删掉选中片段（音频轨上是静音）；M = 打标记
+document.addEventListener('keydown', (e) => {
+  if (!edOpenId) return;
+  if (document.querySelector('.modal-backdrop.show')) return;
+  const t = e.target;
+  if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT|OPTION)$/i.test(t.tagName || ''))) return;
+  // Ctrl+Z / ⌘Z = 撤回上一步（和工具栏的「撤回」是同一个栈）
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'z' || e.key === 'Z')) {
+    e.preventDefault(); e.stopPropagation();
+    edUndoStep();
+    return;
+  }
+  // C = 剪刀开关，Esc = 关掉剪刀
+  if (e.key === 'Escape' && edState.cut) { e.preventDefault(); edToggleCut(); return; }
+  if (!e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'c' || e.key === 'C')) {
+    e.preventDefault(); edToggleCut(); return;
+  }
+  const isSpace = e.code === 'Space' || e.key === ' ' || e.key === 'Spacebar';
+  if (isSpace) {
+    if (e.repeat) return;
+    e.preventDefault();
+    if (t && t.tagName === 'BUTTON' && t.blur) t.blur();
+    edPlay();
+    return;
+  }
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    e.preventDefault();
+    if (edState.focus === 'a') edMutePiece(); else edDelPiece();
+    return;
+  }
+  if (!e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'm' || e.key === 'M')) {
+    e.preventDefault();
+    edAddMark();
+  }
+});
+async function edSplit() {
+  const p = edState.pieces[edState.sel];
+  if (!p) { toast('先点一下要分割的那一段（或者直接开剪刀点时间轴）'); return; }
+  const t = edPlayT;
+  const snap = edSnap();
+  const r = edSplitPiece(p, t);
+  if (r.err) { edSetFromSnap(snap); toast(edCutErrMsg(r.err)); return; }
+  edPushSnap(snap, '分割');
+  edState.pieces.push(r.right);
+  edState.pieces.sort((x, y) => x.t0 - y.t0);
+  edState.sel = edState.pieces.indexOf(r.right);
+  edSeekTo(t);
+  edRenderPieces(); edPaint(); syncEditorBtns();
+  await edSaveTrim();
+  toast('已从播放处切开：选中要减掉的片段按 Delete，或把其中一段拖到别的轨上');
+}
+async function edDelPiece() {
+  if (!edOpenId) return;
+  // 选中的是音频块：声音是跟着片段走的，「删掉声音」= 静音这一段
+  if (edState.focus === 'a') return edMutePiece();
+  const p = edState.pieces[edState.sel];
+  if (!p) return;
+  if (edState.pieces.length <= 1) { toast('至少保留一段；想恢复完整素材点「恢复原片」'); return; }
+  edPushUndo('删除片段');
+  const len = edVLen(p);
+  const end = edVEnd(p);
+  const vLane = p.v;
+  edState.pieces.splice(edState.sel, 1);
+  // 同一画面轨后面的片段自动往前接上（不留空洞），其它轨不受影响
+  for (const q of edState.pieces) {
+    if (q.v !== vLane || q.t0 < end - 0.001) continue;
+    q.t0 = +Math.max(0, q.t0 - len).toFixed(3);
+    if (Number.isFinite(q.aT0)) q.aT0 = +Math.max(0, q.aT0 - len).toFixed(3);
+  }
+  edState.sel = Math.max(0, Math.min(edState.sel, edState.pieces.length - 1));
+  edSeekTo(Math.max(0, p.t0));
+  edRenderPieces(); edPaint(); syncEditorBtns();
+  await edSaveTrim();
+  toast('已删掉这一段，同一轨后面的片段自动接上');
+}
+async function edMutePiece() {
+  if (!edOpenId) return;
+  const p = edState.pieces[edState.sel]; if (!p) return;
+  edPushUndo(p.aMute ? '恢复本段声音' : '静音本段');
+  p.aMute = !p.aMute;
+  edRenderPieces(); edPaint(); syncEditorBtns();
+  await edSaveTrim();
+  toast(p.aMute ? '这一段已静音（画面保留，声音去掉）' : '这一段已恢复声音');
+}
+async function edToggleMuteAll() {
+  if (!edOpenId) return;
+  edPushUndo(edState.muted ? '取消整条静音' : '整条静音');
+  edState.muted = !edState.muted;
+  edRenderPieces(); edPaint();
+  await edSaveTrim();
+  toast(edState.muted ? '整条音轨已静音（这条素材在成片里没声音）' : '整条音轨已恢复声音');
+}
+async function edSetVolume(v) {
+  if (!edOpenId) return;
+  const n = Number(v);
+  const nv = ED_VOLS.includes(n) ? n : 1;
+  if (Math.abs(nv - edState.volume) < 0.001) return;
+  edPushUndo('调音量');
+  edState.volume = nv;
+  // >100% 需要真正放大预览（Web Audio）。必须在这次点击手势里建 AudioContext，否则浏览器会挂起它导致预览无声
+  const boostOk = edBoostEnsure(nv);
+  edPaint(); edRenderPieces();
+  if (!boostOk && nv > 1) toast('浏览器预览最高 100%，' + Math.round(nv * 100) + '% 已保存，成片渲染时会生效');
+  await edSaveTrim();
+}
+async function edSetSpeed(v) {
+  const s = Number(v) || 1;
+  const ns = ED_SPEEDS.includes(s) ? s : 1;
+  if (Math.abs(ns - edState.speed) < 0.001) return;
+  edPushUndo('改速度');
+  edState.speed = ns;
+  const E = edEls(); if (E.v) E.v.playbackRate = edState.speed;
+  const sel = document.getElementById('ed-speed'); if (sel) sel.value = String(edState.speed);
+  edPaint();
+  await edSaveTrim();
+}
+async function edReset() {
+  const E = edEls(); if (!edOpenId) return;
+  const dur = edState.dur || ((project.materials || []).find((x) => x.id === edOpenId) || {}).duration || 0;
+  edPushUndo('恢复原片');
+  edState.pieces = [{ t0:0, in:0, out:dur, v:0, a:0 }];
+  edState.sel = 0; edState.speed = 1; edState.muted = false; edState.volume = 1; edState.focus = 'v';
+  const m = (project.materials || []).find((x) => x.id === edOpenId);
+  if (m) m.pieces = undefined;
+  edPlayT = 0;
+  edRenderPieces(); edPaint(); syncEditorBtns();
+  if (E.v) E.v.playbackRate = 1;
+  try {
+    await API.patch(`/api/projects/${PID}/materials/${edOpenId}`, { pieces:null, trimIn:0, trimOut:+dur.toFixed(2), speed:1, muted:false, volume:1 });
+    if (m) { m.trimIn = 0; m.trimOut = dur; m.pieces = undefined; m.speed = 1; m.muted = false; m.volume = 1; }
+    renderInspect(); toast('已恢复完整素材（1x，声音跟随画面）');
+  } catch (e) { toast('失败：' + e.message); }
+}
+async function edToggleExclude() {
+  if (!edOpenId) return;
+  const m = (project.materials || []).find((x) => x.id === edOpenId); if (!m) return;
+  try { await API.patch(`/api/projects/${PID}/materials/${edOpenId}`, { excluded:!m.excluded }); m.excluded = !m.excluded; renderInspect(); syncEditorBtns(); }
+  catch (e) { toast('失败：' + e.message); }
+}
+async function edFlag(flag) {
+  if (!edOpenId) return;
+  const m = (project.materials || []).find((x) => x.id === edOpenId); if (!m) return;
+  try { await API.patch(`/api/projects/${PID}/materials/${edOpenId}`, { [flag]:!m[flag] }); m[flag] = !m[flag]; renderInspect(); syncEditorBtns(); }
+  catch (e) { toast('失败：' + e.message); }
+}
+function edRename() {
+  const id = edOpenId; if (!id) return;
+  const m = (project.materials || []).find((x) => x.id === id); if (!m) return;
+  const cur = m.name || m.originalName || '';
+  const name = prompt('素材名称（仅改显示名，不改文件）', cur); if (name == null) return;
+  const nn = name.trim(); if (!nn) return;
+  API.patch(`/api/projects/${PID}/materials/${id}`, { name:nn })
+    .then(() => { m.name = nn; renderInspect(); const E = edEls(); E.title.textContent = `手动剪辑 · №${matNoMap[id] || ''} ${nn.slice(0, 24)}`; })
+    .catch((e) => toast('重命名失败：' + e.message));
+}
+async function edDelete() {
+  const id = edOpenId; if (!id) return;
+  if (!confirm('删除该素材？')) return;
+  try { await API.del(`/api/projects/${PID}/materials/${id}`); closeMatEditor(); await refreshProject(); }
+  catch (e) { toast('失败：' + e.message); }
+}
+
+async function renameMat(id){
+  const m=((project.materials||[]).find(x=>x.id===id))||{}; if(!m)return;
+  const cur=m.name||m.originalName||'';
+  const name=prompt('素材名称（仅改显示名，不改文件）', cur); if(name==null)return;
+  const nn=name.trim(); if(!nn)return;
+  try{ await API.patch(`/api/projects/${PID}/materials/${id}`,{name:nn}); await loadInspect(); }
+  catch(e){ toast('重命名失败：'+e.message); }
+}
+async function toggleExclude(id,v){
+  await API.patch(`/api/projects/${PID}/materials/${id}`,{excluded:v});
+  await loadInspect(); await refreshProject();
+}
+function previewMat(id){
+  const m=(project.materials||[]).find(x=>x.id===id); if(!m)return;
+  const url = m.beauty ? `/api/projects/${PID}/materials/${id}/beauty`
+    : m.optimized ? `/api/projects/${PID}/materials/${id}/optimized`
+    : `/api/projects/${PID}/materials/${id}/file`;
+  const v=document.getElementById('modal-video'); v.src=url; document.getElementById('modal').classList.add('show'); v.play().catch(()=>{});
+}
+
+// ===== 一键美颜（可选步骤）=====
+async function loadBeauty(){
+  if(!project) { try{ project=await API.get('/api/projects/'+PID); }catch(e){ return; } }
+  renderBeauty();
+}
+function renderBeauty(){
+  const all=(project&&project.materials||[]).filter(m=>m.type==='video'&&!m.excluded);
+  // 步骤门槛：只有「一次修改」里点过完成的素材才进这一步
+  const mats=all.filter(m=>m.editDone);
+  const waiting=all.length-mats.length;
+  const done=mats.filter(m=>m.beauty).length;
+  const picked=mats.filter(m=>!m.beautySkip).length;
+  document.getElementById('bl-title').textContent=`素材列表（${mats.length}）· 已美颜 ${done} · 已勾选 ${picked}`+(waiting?` · 待完成 ${waiting}`:'');
+  const emp = waiting>0
+    ? `<div class="empty">还有 <b>${waiting}</b> 条视频素材没在「② 一次修改」里点「完成修改」，完成后再回来。<br><button class="btn btn-sm" style="margin-top:8px" onclick="switchTab('inspect')">去一次修改 →</button></div>`
+    : '<div class="empty">没有可用的视频素材，先回上一步处理吧。</div>';
+  document.getElementById('beauty-grid').innerHTML=mats.map(beautyCard).join('')||emp;
+  syncBeautyBtn(mats);
+}
+// 按钮上带勾选数量：勾了 3 条就写「开始一键美颜（3）」，一条没勾则禁用
+function syncBeautyBtn(mats){
+  if(beautyBusy) return;
+  const btn=document.getElementById('beautyBtn'); if(!btn) return;
+  const list=(mats||(project&&project.materials||[]).filter(m=>m.type==='video'&&!m.excluded&&m.editDone));
+  const picked=list.filter(m=>!m.beautySkip);
+  const allDone=picked.length>0 && picked.every(m=>m.beauty);
+  btn.textContent=(allDone?'重新美颜':'开始一键美颜')+(picked.length?`（${picked.length}）`:'');
+  btn.disabled=picked.length===0;
+}
+function beautyCard(m){
+  const no=(matNoMap&&matNoMap[m.id])||'·';
+  const skip=!!m.beautySkip;
+  const media = m.beauty
+    ? `<img src="/api/projects/${PID}/materials/${m.id}/beauty/thumb" loading="lazy" onerror="this.onerror=null;this.src='/api/projects/${PID}/materials/${m.id}/thumb'">`
+    : matMedia(m,'thumb');
+  return `
+    <div class="mat-card${skip?' no-beauty':''}">
+      <div class="media">${media}
+        <label class="mat-pick${skip?'':' on'}" title="${skip?'未勾选：这条不美颜':'已勾选：这条会美颜'}" onclick="event.stopPropagation()">
+          <input type="checkbox"${skip?'':' checked'} onchange="toggleBeautyPick('${m.id}', this.checked)">
+        </label>
+        <span class="mat-no">${no}</span>
+      </div>
+      <div class="body">
+        <div class="title" title="${esc(m.name||'')}">${esc((m.name||'').slice(0,28))}</div>
+        <div class="tags">⏱ ${fmtDur(m.duration)}${m.beauty?` · <span class="ok">已美颜</span>`:' · 未美颜'}${skip?' · <span class="skip">不美颜</span>':''}</div>
+        <div class="row mt" style="gap:4px;flex-wrap:wrap">
+          <button class="btn btn-sm" onclick="previewMat('${m.id}')">预览</button>
+          ${m.beauty?`<button class="btn btn-sm btn-primary" onclick="compareBeauty('${m.id}')">前后对比</button>
+          <button class="btn btn-sm btn-danger" onclick="undoBeauty('${m.id}')">撤销美颜</button>`:''}
+        </div>
+      </div>
+    </div>`;
+}
+// 勾选 / 取消勾选单条（落库，刷新后仍然记得）。只有打勾的素材才会被美颜。
+async function toggleBeautyPick(id, checked){
+  const m=(project&&project.materials||[]).find(x=>x.id===id); if(!m) return;
+  // 已经美颜过的再取消勾选：留着美颜版会继续进成片，等于白取消，所以顺手清掉
+  let delBeauty=false;
+  if(!checked && m.beauty){
+    if(!confirm('这条已经美颜过了。\n取消勾选会删掉美颜版、恢复用原片，继续？')){ renderBeauty(); return; }
+    delBeauty=true;
+  }
+  if(checked) delete m.beautySkip; else m.beautySkip=true;
+  renderBeauty();
+  try{
+    if(delBeauty){ await API.del(`/api/projects/${PID}/materials/${id}/beauty`); delete m.beauty; }
+    const up=await API.patch(`/api/projects/${PID}/materials/${id}`, { beautySkip: !checked });
+    if(up){ if(up.beautySkip) m.beautySkip=true; else delete m.beautySkip; }
+    renderBeauty();
+  }catch(e){
+    toast(e.message);
+    if(checked) m.beautySkip=true; else delete m.beautySkip;
+    renderBeauty();
+  }
+}
+// 全选 / 全不选
+async function setBeautyPickAll(checked){
+  const mats=(project&&project.materials||[]).filter(m=>m.type==='video'&&!m.excluded&&m.editDone);
+  const todo=mats.filter(m=>checked?!!m.beautySkip:!m.beautySkip);
+  if(!todo.length) return;
+  const beautified=todo.filter(m=>m.beauty);
+  if(!checked && beautified.length && !confirm(`有 ${beautified.length} 条已美颜的素材会被删掉美颜版、恢复原片，继续？`)) return;
+  todo.forEach(m=>{ if(checked) delete m.beautySkip; else m.beautySkip=true; });
+  renderBeauty();
+  for(const m of todo){
+    try{
+      if(!checked && m.beauty){ await API.del(`/api/projects/${PID}/materials/${m.id}/beauty`); delete m.beauty; }
+      await API.patch(`/api/projects/${PID}/materials/${m.id}`, { beautySkip: !checked });
+    }catch(e){ toast(e.message); break; }
+  }
+  renderBeauty();
+  toast(checked?`已勾选 ${mats.length} 条素材`:'已全部取消勾选');
+}
+// ===== 生成倒计时（一键美颜 / 字幕识别共用）=====
+// 进度 = 已完成百分比。用「已完成 ÷ 已耗时」反推速度再算剩余；
+// 两次进度事件之间按秒自减，所以数字一直在走，运营能据此安排别的事。
+function fmtSpan(sec){
+  sec = Math.max(0, Math.round(sec));
+  if(sec < 60) return sec + ' 秒';
+  const m = Math.floor(sec/60), s = sec%60;
+  if(m < 60) return m + ' 分 ' + String(s).padStart(2,'0') + ' 秒';
+  return Math.floor(m/60) + ' 小时 ' + String(m%60).padStart(2,'0') + ' 分';
+}
+// opt.waitText：进度还没动起来时显示什么（比如「模型加载中」）
+function makeEta(elId, opt){
+  opt = opt || {};
+  let el = null, t0 = 0, lastP = 0, lastT = 0, rate = 0, timer = null, stopped = true, doneLabel = '总用时';
+  const paint = () => {
+    if(!el || stopped) return;
+    const passed = (Date.now() - t0) / 1000;
+    // 还没进度：只报已用时间，别乱估（模型加载 / 首帧解码阶段估出来的都是错的）
+    if(lastP < 1){
+      el.textContent = '已用 ' + fmtSpan(passed) + (opt.waitText ? ' · ' + opt.waitText : '');
+      el.classList.add('eta-wait');
+      return;
+    }
+    // 有进度但还没有速度样本（刚拿到第一个进度点）：先不算剩余
+    if(!rate){
+      el.textContent = '已用 ' + fmtSpan(passed) + ' · 正在估算…';
+      el.classList.add('eta-wait');
+      return;
+    }
+    el.classList.remove('eta-wait');
+    const idle = (Date.now() - lastT) / 1000;                     // 上次进度事件之后空转了多少秒
+    // 速率封顶 50%/秒，避免极短视频里算出"剩余 0 秒"然后干等
+    const remain = Math.max(0, (100 - lastP) / Math.min(rate, 50) - idle);
+    el.textContent = '已用 ' + fmtSpan(passed) + (remain < 1.5 ? ' · 即将完成…' : ' · 预计剩余 ' + fmtSpan(remain));
+  };
+  return {
+    start(){
+      el = document.getElementById(elId);
+      t0 = Date.now(); lastP = 0; lastT = t0; rate = 0; stopped = false;
+      if(el){ el.textContent = ''; el.classList.add('eta-wait'); }
+      clearInterval(timer); timer = setInterval(paint, 1000);
+      paint();
+    },
+    // 进度只增不减：并发处理时事件顺序会乱，倒退会让剩余时间突然变长
+    // 第一个进度点只当基准——那一整段里混着模型加载/首帧解码，拿它算速度会慢得离谱
+    // 之后用「与上一个事件之间的瞬时速度」做指数平滑，比"从开始线性外推"更跟得上真实节奏
+    update(p){
+      if(stopped || typeof p !== 'number' || !isFinite(p)) return;
+      const v = Math.max(lastP, Math.min(100, p));
+      const now = Date.now();
+      if(v >= 1 && lastP < 1){ lastP = v; lastT = now; paint(); return; }
+      const dt = (now - lastT) / 1000;
+      if(v > lastP && dt >= 0.3){
+        const inst = (v - lastP) / dt;                             // %/秒
+        if(inst > 0) rate = rate ? rate * 0.5 + inst * 0.5 : inst;
+      }
+      lastP = v; lastT = now;
+      // 一直等不到第二个进度点（很短的任务）：用整体平均兜底，别让数字一直"正在估算"
+      if(!rate && (now - t0) > 8000) rate = lastP / Math.max(1, (now - t0) / 1000);
+      paint();
+    },
+    finish(){
+      if(stopped) return;
+      stopped = true; clearInterval(timer);
+      if(el && t0) { el.classList.remove('eta-wait'); el.textContent = doneLabel + ' ' + fmtSpan((Date.now() - t0) / 1000); }
+    },
+    stop(){
+      stopped = true; clearInterval(timer); t0 = 0;
+      if(!el) el = document.getElementById(elId);
+      if(el){ el.classList.remove('eta-wait'); el.textContent = ''; }
+    }
+  };
+}
+let beautyEta = null, asrEta = null, renderEta = null;
+let beautyBusy = false;   // 美颜进行中：不让 renderBeauty 改按钮文案/禁用态
+
+async function startBeauty(){
+  if(!(project&&project.materials||[]).some(m=>m.editDone&&m.type==='video'&&!m.excluded)){
+    toast('还没有「一次修改」完成的视频素材，先去上一步点「完成修改」'); return;
+  }
+  const picked=(project.materials||[]).filter(m=>m.type==='video'&&!m.excluded&&m.editDone&&!m.beautySkip);
+  if(!picked.length){ toast('一条都没勾选，先在下面勾选要美颜的素材'); return; }
+  beautyBusy = true;
+  const btn=document.getElementById('beautyBtn'); btn.disabled=true; btn.textContent='美颜中…';
+  const wrap=document.getElementById('beauty-progress');
+  wrap.classList.remove('done','error');
+  document.getElementById('bp-ico').style.display='none';
+  document.getElementById('bp-barwrap').style.display='';
+  document.getElementById('bp-log').innerHTML='';
+  wrap.style.display='';
+  beautyEta = beautyEta || makeEta('bp-eta', { waitText:'正在启动…' });
+  beautyEta.start();
+  try{
+    await API.post('/api/projects/'+PID+'/beauty',{ preset: document.getElementById('beauty-preset').value });
+  }catch(e){ beautyBusy=false; toast(e.message); btn.disabled=false; btn.textContent='开始一键美颜'; if(beautyEta) beautyEta.stop(); }
+}
+function onBeautyEvent(d){
+  const wrap=document.getElementById('beauty-progress');
+  const st=document.getElementById('bp-status');
+  const bar=document.getElementById('bp-bar');
+  const log=document.getElementById('bp-log');
+  if(wrap) wrap.style.display='';
+  // 只有「纯进度」事件（没有 message）时别把状态文字清空
+  if(st && d.message) st.textContent=d.message;
+  if(bar && typeof d.progress==='number') bar.style.width=d.progress+'%';
+  if(log && d.message) log.innerHTML += `<div>${esc(d.message)}</div>`;
+  if(beautyEta){
+    if(d.status==='running') beautyEta.update(d.progress);
+    else if(d.status==='done') beautyEta.finish();
+    else if(d.status==='error') beautyEta.stop();
+  }
+  const btn=document.getElementById('beautyBtn');
+  if(d.status==='error'&&btn){ beautyBusy=false; btn.disabled=false; btn.textContent='开始一键美颜'; setBeautyIco('error'); toast('美颜失败：'+d.message); }
+  if(d.status==='done'&&btn){
+    beautyBusy=false;
+    btn.disabled=false; btn.textContent='重新美颜';
+    setBeautyIco('done');
+    loadBeauty(); refreshProject();
+    toast(d.message||'一键美颜完成');
+  }
+}
+function setBeautyIco(state){
+  const ico=document.getElementById('bp-ico'); if(!ico) return;
+  ico.style.display=''; ico.textContent=state==='done'?'✓':'✕';
+  ico.classList.toggle('ok', state==='done'); ico.classList.toggle('bad', state==='error');
+  document.getElementById('beauty-progress').classList.add(state==='done'?'done':'error');
+}
+async function undoBeauty(id){
+  try{ await API.del(`/api/projects/${PID}/materials/${id}/beauty`); await refreshProject(); await loadBeauty(); toast('已撤销美颜，恢复使用原片'); }
+  catch(e){ toast(e.message); }
+}
+
+// 美颜前后对比：两段视频并排同步播放
+let cmpSyncBound = false;
+function compareBeauty(id){
+  const m=((project.materials||[]).find(x=>x.id===id))||{}; if(!m||!m.beauty)return;
+  document.getElementById('cmp-name').textContent = m.name||m.originalName||'';
+  const b=document.getElementById('cmp-before'), a=document.getElementById('cmp-after');
+  b.src=`/api/projects/${PID}/materials/${id}/file`;
+  a.src=`/api/projects/${PID}/materials/${id}/beauty`;
+  document.getElementById('cmp-play').textContent='播放';
+  document.getElementById('cmp-time').textContent='0.0s';
+  document.getElementById('cmp-modal').classList.add('show');
+  if(!cmpSyncBound){
+    cmpSyncBound = true;
+    b.addEventListener('timeupdate', ()=>{
+      if(Math.abs(a.currentTime-b.currentTime)>0.2 && !a.seeking) a.currentTime=b.currentTime;
+      document.getElementById('cmp-time').textContent = b.currentTime.toFixed(1)+'s';
+    });
+    b.addEventListener('ended', ()=>{ a.pause(); document.getElementById('cmp-play').textContent='播放'; });
+  }
+}
+async function cmpToggle(){
+  const b=document.getElementById('cmp-before'), a=document.getElementById('cmp-after'), btn=document.getElementById('cmp-play');
+  if(!b.src) return;
+  if(b.paused){
+    a.currentTime=b.currentTime;
+    await Promise.all([b.play().catch(()=>{}), a.play().catch(()=>{})]);
+    btn.textContent='暂停';
+  } else { b.pause(); a.pause(); btn.textContent='播放'; }
+}
+function closeCmp(){
+  const b=document.getElementById('cmp-before'), a=document.getElementById('cmp-after');
+  b.pause(); a.pause(); b.removeAttribute('src'); a.removeAttribute('src'); b.load(); a.load();
+  document.getElementById('cmp-modal').classList.remove('show');
+}
+
+// ===== 系统原创配乐 =====
+// ===== 口播字幕识别（ASR）=====
+let asrData = null;
+let asrWarmTimer = null;
+async function loadAsr(){
+  try{ asrData = await API.get('/api/projects/'+PID+'/asr'); }
+  catch(e){ return; }
+  renderAsr();
+}
+function renderAsr(){
+  if(!asrData) return;
+  const eng = asrData.engine||{};
+  const warm = eng.warm||{};
+  const models = (eng.models||[]).filter(m=>m.ready);
+  const sel = document.getElementById('asr-model');
+  if(sel){
+    sel.innerHTML = models.length
+      ? models.map(m=>`<option value="${m.key}">${esc(m.label)}（${m.sizeMB}MB）</option>`).join('')
+      : '<option value="">未检测到模型</option>';
+    const cfgModel = (asrData.config&&asrData.config.model)||eng.defaultModel||'';
+    if(cfgModel && models.some(m=>m.key===cfgModel)) sel.value = cfgModel;
+  }
+  const engLabel = document.getElementById('asr-engine');
+  if(engLabel){
+    let t = eng.ready
+      ? `本机已就绪：${eng.defaultLabel||eng.defaultModel||'模型'} · 离线识别`
+      : '未就绪：缺少 Python 环境或识别模型（whisper/paraformer/sensevoice）';
+    engLabel.textContent = t;
+  }
+  const btn = document.getElementById('asrBtn');
+  btn.disabled = !eng.ready || asrData.running;
+  btn.textContent = asrData.running ? '识别中…' : '识别口播字幕';
+  // 未完成「一次修改」的素材不参与识别，明示数量
+  const waitingEl = document.getElementById('asr-waiting');
+  if(waitingEl){
+    const w = asrData.waiting||0;
+    waitingEl.style.display = w?'':'none';
+    if(w) waitingEl.textContent = `还有 ${w} 条素材未完成修改，不参与识别`;
+  }
+
+  const list = asrData.materials||[];
+  document.getElementById('asr-list').innerHTML = list.length ? list.map(m=>{
+    const a = m.asr;
+    if(!a) return `<div class="row wrap" style="gap:8px;border-top:1px solid var(--line);padding:8px 0">
+      <span style="flex:1;min-width:160px">${esc((m.name||'').slice(0,30))}</span>
+      <span class="chip warn">未识别</span>
+      <button class="btn btn-sm" onclick="startAsr(['${m.id}'])">识别这条</button>
+    </div>`;
+    const sp = a.speech||{};
+    if(a.legacy) return `<div class="row wrap" style="gap:8px;border-top:1px solid var(--line);padding:8px 0">
+      <span style="flex:1;min-width:160px">${esc((m.name||'').slice(0,30))}</span>
+      <span class="chip warn">结果格式较旧</span>
+      <span class="muted" style="font-size:11.5px">（缺少可信度指标，无法排除幻听，需重新识别）</span>
+      <button class="btn btn-sm btn-primary" onclick="startAsr(['${m.id}'])">重新识别</button>
+      <button class="btn btn-sm btn-danger" onclick="delAsr('${m.id}')">清除</button>
+    </div>`;
+    if(a.speechless) return `<div class="row wrap" style="gap:8px;border-top:1px solid var(--line);padding:8px 0">
+      <span style="flex:1;min-width:160px">${esc((m.name||'').slice(0,30))}</span>
+      <span class="chip warn">未检测到清晰人声</span>
+      <span class="muted" style="font-size:11.5px">（多为音乐/环境音，按规则不生成字幕，避免幻听假字幕）</span>
+      <button class="btn btn-sm" onclick="startAsr(['${m.id}'])">重新识别</button>
+      <button class="btn btn-sm btn-danger" onclick="delAsr('${m.id}')">清除</button>
+    </div>`;
+    return `<div class="row wrap" style="gap:8px;border-top:1px solid var(--line);padding:8px 0">
+      <span style="flex:1;min-width:160px">${esc((m.name||'').slice(0,30))}</span>
+      <span class="chip ok">${a.cueCount} 条字幕</span>
+      ${sp.charsPerSec?`<span class="chip">语速 ${sp.charsPerSec} 字/秒</span>`:''}
+      ${sp.ratio?`<span class="chip">有声 ${Math.round(sp.ratio*100)}%</span>`:''}
+      ${a.repeatCount?`<span class="chip warn">重复口播 ${a.repeatCount} 处</span>`:''}
+      <span class="muted" style="font-size:11.5px">${esc(a.model||'')}</span>
+      <button class="btn btn-sm" onclick="viewAsr('${m.id}')">查看字幕</button>
+      <button class="btn btn-sm" onclick="downloadMatSrt('${m.id}')">SRT</button>
+      <button class="btn btn-sm btn-danger" onclick="delAsr('${m.id}')">清除</button>
+    </div>`;
+  }).join('') : (()=>{
+    const waiting=(project&&project.materials||[]).filter(m=>m.type==='video'&&!m.editDone).length;
+    return waiting>0
+      ? `<div class="empty">还有 <b>${waiting}</b> 条视频素材没在「② 一次修改」里点「完成修改」，完成后再回来识别。<br><button class="btn btn-sm" style="margin-top:8px" onclick="switchTab('inspect')">去一次修改 →</button></div>`
+      : '<div class="muted">还没有视频素材。</div>';
+  })();
+  // 预热中：隔几秒刷一次状态，加载完把「模型预热中」换成「常驻内存，约 1 秒/条」
+  if(warm.loading){
+    clearTimeout(asrWarmTimer);
+    asrWarmTimer = setTimeout(()=>{ loadAsr(); }, 4000);
+  }
+}
+async function startAsr(ids){
+  if(!(project&&project.materials||[]).some(m=>m.editDone&&m.type==='video')){
+    toast('还没有「一次修改」完成的视频素材，先去上一步点「完成修改」'); return;
+  }
+  const btn=document.getElementById('asrBtn'); btn.disabled=true; btn.textContent='识别中…';
+  const wrap=document.getElementById('asr-progress');
+  wrap.style.display=''; wrap.classList.remove('done','error');
+  const ico=document.getElementById('asp-ico'); ico.style.display='none';
+  document.getElementById('asp-bar').style.width='0%';
+  document.getElementById('asp-log').innerHTML='';
+  asrEta = asrEta || makeEta('asp-eta', { waitText:'模型加载中…' });
+  asrEta.start();
+  try{
+    await API.post('/api/projects/'+PID+'/asr', {
+      ids: ids||undefined,
+      model: document.getElementById('asr-model').value||undefined,
+      force: document.getElementById('asr-force').checked,
+    });
+  }catch(e){ toast(e.message); btn.disabled=false; btn.textContent='识别口播字幕'; }
+}
+function onAsrEvent(d){
+  const wrap=document.getElementById('asr-progress');
+  const st=document.getElementById('asp-status');
+  const bar=document.getElementById('asp-bar');
+  const log=document.getElementById('asp-log');
+  const ico=document.getElementById('asp-ico');
+  if(wrap){ wrap.style.display=''; }
+  if(st) st.textContent=d.message||'';
+  if(bar && typeof d.progress==='number') bar.style.width=d.progress+'%';
+  if(asrEta){
+    if(d.status==='running') asrEta.update(d.progress);
+    else if(d.status==='done') asrEta.finish();
+    else if(d.status==='error') asrEta.stop();
+  }
+  if(log && d.message) log.innerHTML += `<div>${esc(d.message)}</div>`;
+  const btn=document.getElementById('asrBtn');
+  if(d.status==='error'&&btn){
+    btn.textContent='识别口播字幕';
+    if(wrap) wrap.classList.add('error');
+    if(ico){ ico.textContent='✕'; ico.className='status-ico bad'; ico.style.display=''; }
+    if(st) st.textContent='识别失败：'+(d.message||'');
+    toast('识别失败：'+d.message);
+  }
+  if(d.status==='done'&&btn){
+    btn.textContent='识别口播字幕';
+    if(wrap) wrap.classList.add('done');
+    if(ico){ ico.textContent='✓'; ico.className='status-ico ok'; ico.style.display=''; }
+    if(st) st.textContent='口播字幕识别完成';
+    loadAsr().then(()=>refreshProject());
+    toast('口播字幕识别完成');
+  }
+}
+async function viewAsr(id){
+  const d = await API.get(`/api/projects/${PID}/materials/${id}/asr`);
+  if(!d.ready) return toast('该素材还没有识别结果');
+  if(d.speechless){
+    document.getElementById('asr-modal-title').textContent = '未检测到清晰人声';
+    document.getElementById('asr-modal-body').innerHTML = `<div class="muted">这条素材没有识别出可信的人声（多为背景音乐/环境音）。系统按规则<b>不上字幕</b>，避免把音乐幻听成假字幕压进成片。</div>`;
+    document.getElementById('asr-modal').classList.add('show');
+    return;
+  }
+  const m=(project.materials||[]).find(x=>x.id===id);
+  document.getElementById('asr-modal-title').textContent = `字幕时间轴 · ${(m&&(m.originalName||m.filename))||''}`;
+  const rep = (d.repeats&&d.repeats.items)||[];
+  document.getElementById('asr-modal-body').innerHTML = `
+    <div class="row wrap" style="gap:6px;margin-bottom:8px">
+      <span class="chip ok">${d.cues.length} 条</span>
+      <span class="chip">${esc(d.language||'zh')}</span>
+      <span class="chip">时长 ${fmtDur(d.duration)}</span>
+    </div>
+    ${rep.length?`<div class="section-title">重复口播（可直接剪掉其中一处）</div>
+      <div class="muted" style="font-size:12px;margin-bottom:6px">${rep.map(r=>`· ${esc(r.text)} — ${r.times.map(t=>fmtDur(t.start)).join(' / ')}`).join('<br>')}</div>`:''}
+    <div class="section-title">字幕时间轴</div>
+    <div style="max-height:340px;overflow:auto;font-size:13px;line-height:1.9">
+      ${d.cues.map(c=>`<div><span class="muted">${esc(fmtDur(c.start))} → ${esc(fmtDur(c.end))}</span> ${esc(c.text)}</div>`).join('')||'<div class="muted">没有识别到人声</div>'}
+    </div>`;
+  document.getElementById('asr-modal-srt').onclick = ()=>downloadMatSrt(id);
+  document.getElementById('asr-modal').classList.add('show');
+}
+function closeAsrModal(){ document.getElementById('asr-modal').classList.remove('show'); }
+function downloadMatSrt(id){ window.open(`/api/projects/${PID}/materials/${id}/asr/srt`,'_blank'); }
+async function delAsr(id){ if(!confirm('清除该素材的识别结果？'))return; await API.del(`/api/projects/${PID}/materials/${id}/asr`); await loadAsr(); toast('已清除'); }
+
+async function loadMusicPresets(){
+  try{
+    const j = await API.get('/api/music/presets');
+    const sel=document.getElementById('music-preset');
+    const cur=project.musicPreset||'';
+    sel.innerHTML = `<option value="">自动匹配（按项目风格）</option>` +
+      (j.presets||[]).map(p=>`<option value="${p.key}" ${p.key===cur?'selected':''}>${esc(p.label)} · ${p.bpm}BPM</option>`).join('');
+    const gen=document.getElementById('lib-gen-sel');
+    if(gen) gen.innerHTML = (j.presets||[]).map(p=>`<option value="${p.key}">${esc(p.label)}</option>`).join('');
+    updateMusicStatus();
+  }catch(e){}
+  loadMusicLib();
+}
+
+// ===== 音乐素材库（跨项目留存）=====
+let musicLibTracks = [];
+let libAudioId = null;   // 当前试听的曲目 id
+async function loadMusicLib(){
+  try{
+    const j = await API.get('/api/music-library');
+    musicLibTracks = j.tracks||[];
+  }catch(e){ musicLibTracks = []; }
+  renderMusicLib();
+}
+function updateMusicStatus(){
+  const st=document.getElementById('music-status'); if(!st) return;
+  const cur=(musicLibTracks||[]).find(t=>t.id===(project.musicLibId||''));
+  const del=document.getElementById('musicDel');
+  if(cur){ st.textContent=`当前使用素材库：${cur.name}（混剪时自动循环铺底）`; if(del) del.style.display='inline-block'; }
+  else if(project.musicPath){ st.textContent='当前使用项目上传音乐'; if(del) del.style.display='inline-block'; }
+  else { st.textContent='未选用（混剪时按风格自动匹配系统原创配乐）'; if(del) del.style.display='none'; }
+  const hint=document.getElementById('music-preset-hint');
+  if(hint) hint.textContent = (project.musicLibId||project.musicPath) ? '选用了素材库/上传音乐时，这里不生效' : '原创合成，无第三方版权';
+}
+function renderMusicLib(){
+  const box=document.getElementById('music-lib'); if(!box) return;
+  updateMusicStatus();
+  if(!(musicLibTracks||[]).length){
+    box.innerHTML='<div class="muted" style="padding:6px 0">素材库还是空的：点「✨ 生成入库」一键生成原创配乐，或「⬆ 上传入库」导入自有音乐（所有项目可复用）。</div>';
+    return;
+  }
+  box.innerHTML = musicLibTracks.map(t=>{
+    const on = t.id===(project.musicLibId||'');
+    const playing = libAudioId===t.id;
+    return `<div class="lib-row ${on?'on':''}">
+      <button class="btn btn-sm lib-play" onclick="libPlay('${t.id}')" title="${playing?'停止试听':'试听'}">${playing?'⏸':'▶'}</button>
+      <div class="lib-info">
+        <div><b>${esc(t.name)}</b> <span class="badge gray">${esc(t.style||'')}</span>${on?' <span class="badge" style="background:#e3f6ea;color:#1f8a4c">使用中</span>':''}</div>
+        <div class="muted" style="font-size:12px">${esc(t.scene||'')} · ${fmtDur(t.duration||0)}${t.bpm?' · '+t.bpm+'BPM':''} · ${t.source==='上传'?'用户上传（版权自审）':'AI 原创 · 可商用'}</div>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn btn-sm ${on?'':'btn-primary'}" onclick="useLibMusic('${t.id}')">${on?'使用中':'选用'}</button>
+      <button class="btn btn-sm btn-danger" onclick="delLibMusic('${t.id}')">删除</button>
+    </div>`;
+  }).join('');
+}
+async function libPlay(id){
+  const a=document.getElementById('music-audio');
+  if(libAudioId===id && !a.paused){ a.pause(); libAudioId=null; renderMusicLib(); return; }
+  libAudioId=id;
+  a.src=`/api/music-library/${id}/file`; a.currentTime=0; a.volume=0.9;
+  a.onended=()=>{ libAudioId=null; renderMusicLib(); };
+  a.play().then(()=>renderMusicLib()).catch(()=>{ toast('试听失败'); libAudioId=null; renderMusicLib(); });
+}
+async function useLibMusic(id){
+  try{
+    await API.patch('/api/projects/'+PID,{musicLibId:id});
+    project.musicLibId=id;
+    renderMusicLib();
+    const t=(musicLibTracks||[]).find(x=>x.id===id);
+    toast('已选用「'+(t?t.name:'配乐')+'」，下次生成视频时生效');
+  }catch(e){ toast(e.message); }
+}
+async function clearMusicChoice(){
+  try{
+    await API.patch('/api/projects/'+PID,{musicLibId:''});
+    project.musicLibId='';
+    if(project.musicPath){ await delMusic(); }
+    renderMusicLib(); toast('已取消选用，恢复自动配乐');
+  }catch(e){ toast(e.message); }
+}
+async function delLibMusic(id){
+  if(!confirm('从素材库删除该音乐？（不影响已生成的视频）')) return;
+  if(libAudioId===id){ const a=document.getElementById('music-audio'); a.pause(); libAudioId=null; }
+  try{ await API.del('/api/music-library/'+id); }catch(e){ toast(e.message); }
+  await loadMusicLib();
+}
+async function libGenerate(){
+  const key=document.getElementById('lib-gen-sel').value||'piano';
+  toast('正在生成，几秒后入库…');
+  try{ await API.post('/api/music-library/generate',{key}); await loadMusicLib(); toast('已生成并加入素材库'); }
+  catch(e){ toast(e.message); }
+}
+async function setMusicPreset(v){
+  await API.patch('/api/projects/'+PID, {musicPreset:v});
+  project.musicPreset=v; await loadMusicPresets();
+  toast(v?'配乐风格已切换':'已恢复自动匹配');
+}
+function auditionMusic(){
+  const k=document.getElementById('music-preset').value || (require_default_preset());
+  const a=document.getElementById('music-audio');
+  a.src='/api/music/presets/'+(k||'fresh')+'/file';
+  a.currentTime=0; a.volume=0.9; a.play().then(()=>toast('试听中（再次点击停止）')).catch(()=>toast('试听失败'));
+}
+function require_default_preset(){ return 'fresh'; }
+
+// ===== 字幕来源（真实语音识别 / 脚本卖点）=====
+function renderSubtitleSource(){
+  const sel=document.getElementById('sub-source'); if(!sel||!project)return;
+  sel.value = (project.subtitle&&project.subtitle.source)||'auto';
+  const n=(project.materials||[]).filter(m=>m.asr&&m.asr.cueCount>0).length;
+  const hint=document.getElementById('sub-source-hint');
+  if(hint) hint.textContent = n ? `已识别口播字幕的素材：${n} 个（未识别的片段仍用卖点字幕）` : '还没识别过口播字幕，可到「③ AI 素材审核」页识别';
+}
+async function setSubtitleSource(v){
+  await API.patch('/api/projects/'+PID,{subtitle:{source:v}});
+  await refreshProject(); renderSubtitleSource();
+  toast(v==='asr'?'已设为只用真实语音字幕':v==='script'?'已设为只用脚本卖点字幕':'已设为自动');
+}
+
+// ===== 自动混剪（按分类）=====
+async function loadRender(){
+  if(!project) return;
+  const mats=(project.materials||[]).filter(m=>m.editDone && !m.forbidden && !m.excluded && m.status==='analyzed');
+  const cnt={开头:0,材质:0,规格:0,讲解:0,片尾:0,未分类:0};
+  for(const m of mats){ cnt[m.part||'未分类']=(cnt[m.part||'未分类']||0)+1; }
+  const order=['开头','材质','规格','讲解','片尾','未分类'];
+  const sum=document.getElementById('part-summary');
+  if(sum) sum.innerHTML=order.map(k=>`<span class="chip" style="${k==='未分类'&&cnt[k]?'color:#c0392b':''}">${k}：${cnt[k]}</span>`).join('');
+  const warn=document.getElementById('part-warn');
+  if(warn){ if(cnt['未分类']>0){ warn.style.display='block'; warn.textContent=`有 ${cnt['未分类']} 个素材未分类，将归入中间混搭（建议到「② 一次修改」标好开头/材质/规格/讲解/片尾，以获得最佳顺序）。`; } else warn.style.display='none'; }
+  const d=document.getElementById('rd-duration'); if(d) d.value=project.duration||30;
+  const c=document.getElementById('rd-count'); if(c) c.value=project.count||1;
+  const ts=document.getElementById('tpl-select');
+  if(ts){ const list=(window.TEMPLATES||[]); const has=list.some(t=>t.name===project.style);
+    ts.innerHTML=list.map(t=>`<option value="${esc(t.name)}" ${t.name===project.style?'selected':''}>${esc(t.name)}</option>`).join('')+(has||!project.style?'':`<option value="${esc(project.style)}" selected>${esc(project.style)}（当前）</option>`); }
+  const st=project.subtitle||{};
+  setVal('rd-capSize', st.captionSize!=null?st.captionSize:0.03);
+  setVal('rd-capPos', st.captionPos!=null?st.captionPos:0.85);
+  setVal('rd-capColor', st.captionColor||'white');
+  setVal('rd-capOutlineColor', st.captionOutlineColor||'black');
+  const cv=document.getElementById('rd-capSize-val'); if(cv) cv.textContent=(st.captionSize!=null?st.captionSize:0.03);
+  const rh=document.getElementById('render-hint'); if(rh) rh.textContent=`按分类顺序混搭，每条素材完整播完（成片可能略长于设置的最短时长）`;
+}
+function setVal(id,v){ const e=document.getElementById(id); if(e) e.value=v; }
+function onDurationInput(){ const v=parseInt(document.getElementById('rd-duration').value,10); if(!v||v<5) return; API.patch('/api/projects/'+PID,{duration:v}).then(()=>refreshProject()).catch(()=>{}); }
+function onCountInput(){ const v=parseInt(document.getElementById('rd-count').value,10); if(!v||v<1) return; API.patch('/api/projects/'+PID,{count:v}).then(()=>refreshProject()).catch(()=>{}); }
+async function saveSubtitleStyle(){
+  const st={
+    captionSize: parseFloat(document.getElementById('rd-capSize').value),
+    captionPos: parseFloat(document.getElementById('rd-capPos').value),
+    captionColor: document.getElementById('rd-capColor').value,
+    captionOutlineColor: document.getElementById('rd-capOutlineColor').value,
+  };
+  await API.patch('/api/projects/'+PID,{subtitle: st});
+  await refreshProject();
+  toast('已保存默认字幕样式（新生成的视频采用；已生成的可在结果页逐段改）');
+}
+
+// ===== 混剪 =====
+document.getElementById('musicInput').addEventListener('change',async e=>{
+  const f=e.target.files[0]; if(!f)return;
+  const form=new FormData(); form.append('file',f);
+  try{
+    const t=await API.postForm('/api/music-library',form);
+    await loadMusicLib();
+    await useLibMusic(t.id);
+    toast('已入库并选用：'+(t.name||'音乐'));
+  }catch(err){ toast(err.message); }
+  e.target.value='';
+});
+async function delMusic(){ await API.del(`/api/projects/${PID}/music`); project.musicPath=''; updateMusicStatus(); }
+
+async function startRender(){
+  const analyzed=(project.materials||[]).filter(m=>m.status==='analyzed');
+  if(!analyzed.length){ toast('请先上传并完成至少 1 个素材的分析'); return; }
+  document.getElementById('render-progress').style.display='block';
+  document.getElementById('render-progress').classList.remove('done','error');
+  document.getElementById('rp-ico').style.display='none';
+  document.getElementById('rp-barwrap').style.display='';
+  document.getElementById('rp-bar').style.width='0%'; document.getElementById('rp-log').textContent=''; document.getElementById('rp-log').style.display='';
+  renderEta = renderEta || makeEta('rp-eta', { waitText:'正在规划镜头…' });
+  renderEta.start();
+  try{
+    const {taskId}=await API.post(`/api/projects/${PID}/render`,{});
+    subscribeStream(`/api/tasks/${taskId}/stream`, onRenderEvent);
+  }catch(e){ toast(e.message); if(renderEta) renderEta.stop(); }
+}
+function setRenderIco(state){
+  const ico=document.getElementById('rp-ico'); if(!ico) return;
+  ico.style.display=''; ico.textContent=state==='done'?'✓':'✕';
+  ico.classList.toggle('ok', state==='done'); ico.classList.toggle('bad', state==='error');
+  document.getElementById('render-progress').classList.add(state==='done'?'done':'error');
+}
+function onRenderEvent(d){
+  if(d.progress!=null){ document.getElementById('rp-bar').style.width=d.progress+'%'; }
+  if(renderEta){
+    if(d.status==='planning'||d.status==='rendering') renderEta.update(d.progress);
+    else if(d.status==='done') renderEta.finish();
+    else if(d.status==='error') renderEta.stop();
+  }
+  if(d.message){ document.getElementById('rp-status').textContent=d.message; document.getElementById('rp-log').textContent+='\n· '+d.message; document.getElementById('rp-log').scrollTop=1e9; }
+  if(d.status==='done'){
+    // 完成：去掉进度条和日志，只留 ✓ + 总用时
+    document.getElementById('rp-barwrap').style.display='none';
+    document.getElementById('rp-log').style.display='none';
+    setRenderIco('done');
+    showWarnings(d.warnings); toast('生成完成'); switchTab('results');
+  }
+  if(d.status==='error'){
+    document.getElementById('rp-barwrap').style.display='none';
+    setRenderIco('error');
+    toast('生成失败：'+(d.message||''));
+  }
+}
+function showWarnings(w){
+  if(!w||!w.length){ document.getElementById('render-warnings').style.display='none'; return; }
+  document.getElementById('render-warnings').style.display='block';
+  document.getElementById('rw-list').innerHTML=w.map(x=>`<div class="chip warn" style="display:block;margin-bottom:6px">${esc(x)}</div>`).join('');
+}
+
+// ===== 结果 =====
+const vidPick = new Set();   // 批量删除勾选（成片 id）
+function renderVideos(){
+  const vs=project.videos||[];
+  for(const id of [...vidPick]) if(!vs.find(v=>v.id===id)) vidPick.delete(id);  // 清掉已不存在的勾选
+  document.getElementById('video-empty').style.display=vs.length?'none':'block';
+  document.getElementById('zipBtn').style.display=vs.length?'inline-block':'none';
+  const allBtn=document.getElementById('vidAllBtn'), delBtn=document.getElementById('vidDelBtn');
+  allBtn.style.display=vs.length?'inline-block':'none';
+  delBtn.style.display=vs.length?'inline-block':'none';
+  const allPicked=vs.length&&vs.every(v=>vidPick.has(v.id));
+  allBtn.textContent=allPicked?'全不选':'全选';
+  delBtn.textContent=vidPick.size?`批量删除（${vidPick.size}）`:'批量删除';
+  delBtn.disabled=!vidPick.size;
+  document.getElementById('video-grid').innerHTML=vs.map(v=>`
+    <div class="video-card">
+      <div class="media" onclick="veOpen('${v.id}')" style="cursor:pointer" title="点击进入编辑（字幕调整 / 二次剪辑）">
+        <label class="mat-pick ${vidPick.has(v.id)?'on':''}" title="选中用于批量删除" onclick="event.stopPropagation()"><input type="checkbox" ${vidPick.has(v.id)?'checked':''} onchange="vidToggle('${v.id}')"></label>
+        <img src="/api/projects/${PID}/videos/${v.id}/thumb" onerror="this.style.display='none'">
+        <div class="ve-hint">✏️ 点击编辑</div>
+        ${v.locked?'<div class="lock">🔒 已锁定</div>':''}
+      </div>
+      <div class="body">
+        <div class="title">${esc(v.title)} <span class="badge gray">${v.version}</span></div>
+        <div class="muted">${fmtDur(v.duration)} · ${v.width}×${v.height} · ${fmtSize(v.size)}${v.subtitleMode==='asr'?` · 真实字幕 ${v.subtitleCount||0} 条`:''}${v.cut?' · 已剪辑':''}</div>
+        <div class="actions">
+          <button class="btn btn-sm" onclick="playVideo('${v.id}')">播放</button>
+          <button class="btn btn-sm btn-primary" onclick="veOpen('${v.id}')">✏️ 编辑</button>
+          ${v.srt?`<button class="btn btn-sm" onclick="downloadSrt('${v.id}')">字幕 SRT</button>`:''}
+          <button class="btn btn-sm" onclick="openSubEdit('${v.id}')">字幕逐段</button>
+          <button class="btn btn-sm" onclick="renameVideo('${v.id}')">重命名</button>
+          <button class="btn btn-sm" onclick="toggleLock('${v.id}')">${v.locked?'解锁':'锁定'}</button>
+          <button class="btn btn-sm" onclick="downloadVideo('${v.id}')">下载</button>
+          <button class="btn btn-sm btn-danger" onclick="delVideo('${v.id}')">删除</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+function playVideo(id){ const m=document.getElementById('modal'); m.classList.add('show'); document.getElementById('modal-video').src=`/api/projects/${PID}/videos/${id}/file`; }
+function closeModal(){ document.getElementById('modal').classList.remove('show'); document.getElementById('modal-video').src=''; }
+function downloadVideo(id){ window.open(`/api/projects/${PID}/videos/${id}/file`,'_blank'); }
+function downloadSrt(id){ window.open(`/api/projects/${PID}/videos/${id}/srt`,'_blank'); }
+async function renameVideo(id){ const v=project.videos.find(x=>x.id===id); const name=prompt('视频标题',v.title); if(name==null)return; await API.patch(`/api/projects/${PID}/videos/${id}`,{rename:name}); await refreshProject(); renderVideos(); toast('已重命名'); }
+async function toggleLock(id){ const v=project.videos.find(x=>x.id===id); await API.patch(`/api/projects/${PID}/videos/${id}`,{locked:!v.locked}); await refreshProject(); renderVideos(); }
+async function delVideo(id){ if(!confirm('删除该视频？'))return; await API.del(`/api/projects/${PID}/videos/${id}`); await refreshProject(); renderVideos(); }
+function downloadZip(){ window.open(`/api/projects/${PID}/videos/zip`,'_blank'); }
+function vidToggle(id){ vidPick.has(id)?vidPick.delete(id):vidPick.add(id); renderVideos(); }
+function vidPickAll(){
+  const vs=project.videos||[];
+  const allPicked=vs.length&&vs.every(v=>vidPick.has(v.id));
+  if(allPicked) vidPick.clear(); else vs.forEach(v=>vidPick.add(v.id));
+  renderVideos();
+}
+async function vidDelPicked(){
+  const ids=[...vidPick]; if(!ids.length) return;
+  const locked=ids.map(id=>(project.videos||[]).find(v=>v.id===id)).filter(v=>v&&v.locked).length;
+  let msg=`确定删除选中的 ${ids.length} 条成片？删除后不可恢复。`;
+  if(locked) msg+=`\n注意：其中 ${locked} 条处于锁定状态，将一并删除。`;
+  if(!confirm(msg)) return;
+  let ok=0, fail=0;
+  for(const id of ids){
+    try{ await API.del(`/api/projects/${PID}/videos/${id}`); vidPick.delete(id); ok++; }
+    catch(e){ fail++; }
+  }
+  await refreshProject(); renderVideos();
+  toast(fail?`已删除 ${ok} 条，${fail} 条失败`:'已删除 '+ok+' 条');
+}
+
+// ===== 字幕逐段调整 =====
+const SUB_COLORS = ['white','black','red','yellow','green','blue','orange','pink','cyan','gray'];
+let curSubVid = null;
+
+// 计算每段在成片时间轴上的窗口 [start, end]
+function segTimeWindows(segs){
+  const out=[]; let t=0;
+  for(const s of segs){
+    const dur = Number(s.srcDur) || 0;
+    out.push({ start:+t.toFixed(2), end:+(t+dur).toFixed(2) });
+    t += dur;
+  }
+  return out;
+}
+
+// 从该素材的 ASR 字幕里截取落在 [srcStart, srcStart+srcDur] 范围内的文本（用于预览）
+function segPreviewText(seg){
+  const mat = (project.materials||[]).find(m=>m.id===seg.materialId);
+  if(!mat || !mat.asrCues || !mat.asrCues.length) return '';
+  const lo = Number(seg.srcStart)||0, hi = lo + (Number(seg.srcDur)||0);
+  return mat.asrCues.filter(c=> c.start>=lo-0.05 && c.start<=hi+0.05).map(c=>c.text).join(' ');
+}
+
+function renderSubEditBody(){
+  const v = (project.videos||[]).find(x=>x.id===curSubVid);
+  const body = document.getElementById('sub-edit-body');
+  if(!v || !(v.segments||[]).length){ body.innerHTML = '<div class="empty">该视频没有可导出的分段信息。</div>'; return; }
+  const segs = v.segments, wins = segTimeWindows(segs), g = project.subtitle || {};
+  body.innerHTML = segs.map((s,i)=>{
+    const st = s.subtitleStyle || {};
+    const size = st.captionSize!=null? st.captionSize : (g.captionSize!=null? g.captionSize : 0.03);
+    const pos = st.captionPos!=null? st.captionPos : (g.captionPos!=null? g.captionPos : 0.76);
+    const color = st.captionColor || g.captionColor || 'white';
+    const ocolor = st.captionOutlineColor || g.captionOutlineColor || 'black';
+    const mat = (project.materials||[]).find(m=>m.id===s.materialId);
+    const part = mat && mat.part ? mat.part : (s.category||'');
+    const w = wins[i];
+    const preview = segPreviewText(s);
+    const colorOpts = SUB_COLORS.map(c=>`<option value="${c}" ${c===color?'selected':''}>${c}</option>`).join('');
+    const ocolorOpts = SUB_COLORS.map(c=>`<option value="${c}" ${c===ocolor?'selected':''}>${c}</option>`).join('');
+    return `<div class="sub-seg" data-i="${i}" style="border:1px solid var(--border,#e3e3e8);border-radius:8px;padding:10px;margin-bottom:10px;background:#fff">
+      <div class="row" style="justify-content:space-between;align-items:baseline">
+        <div class="section-title" style="margin:0">第 ${i+1} 段${part?' · '+esc(part):''}</div>
+        <div class="muted">${w.start}s – ${w.end}s（${(w.end-w.start).toFixed(1)}s）</div>
+      </div>
+      ${preview?`<div style="margin:6px 0;font-size:12px;color:#888;max-height:46px;overflow:auto">${esc(preview)}</div>`:'<div class="muted" style="margin:6px 0;font-size:12px">（无声片段）</div>'}
+      <div class="row wrap" style="gap:12px;align-items:flex-end">
+        <label class="field" style="flex:1;min-width:160px"><span>字号大小：${(size*100).toFixed(1)}%</span>
+          <input type="range" min="0.015" max="0.08" step="0.002" value="${size}" oninput="this.previousElementSibling.textContent='字号大小：'+(this.value*100).toFixed(1)+'%'" data-k="captionSize" data-i="${i}">
+        </label>
+        <label class="field" style="flex:1;min-width:160px"><span>垂直位置：${(pos*100).toFixed(0)}%</span>
+          <input type="range" min="0.4" max="0.95" step="0.01" value="${pos}" oninput="this.previousElementSibling.textContent='垂直位置：'+(this.value*100).toFixed(0)+'%'" data-k="captionPos" data-i="${i}">
+        </label>
+      </div>
+      <div class="row wrap" style="gap:12px;align-items:flex-end">
+        <label class="field" style="min-width:120px"><span>字幕颜色</span><select data-k="captionColor" data-i="${i}">${colorOpts}</select></label>
+        <label class="field" style="min-width:120px"><span>描边颜色</span><select data-k="captionOutlineColor" data-i="${i}">${ocolorOpts}</select></label>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openSubEdit(id){
+  curSubVid = id;
+  const v = (project.videos||[]).find(x=>x.id===id);
+  document.getElementById('sub-edit-title').textContent = '字幕逐段调整 · ' + (v? esc(v.title) : '');
+  renderSubEditBody();
+  document.getElementById('sub-edit-modal').classList.add('show');
+}
+function closeSubEdit(){ document.getElementById('sub-edit-modal').classList.remove('show'); curSubVid=null; }
+
+async function applySubEdit(){
+  const v = (project.videos||[]).find(x=>x.id===curSubVid);
+  if(!v || !(v.segments||[]).length){ toast('没有可导出的分段'); return; }
+  const merged = v.segments.map((s,i)=>{
+    const ns = Object.assign({}, s);
+    const style = {};
+    document.querySelectorAll('#sub-edit-body [data-k][data-i="'+i+'"]').forEach(el=>{
+      const k = el.getAttribute('data-k'), val = el.value;
+      if(k==='captionSize'||k==='captionPos') style[k]=Number(val); else style[k]=val;
+    });
+    ns.subtitleStyle = Object.assign({}, s.subtitleStyle||{}, style);
+    return ns;
+  });
+  try{
+    toast('正在应用字幕样式并重新生成…');
+    const r = await API.post('/api/projects/'+PID+'/render', { single: v.version, videoId: v.id, overrides: { segments: merged } });
+    if(r && r.taskId){
+      subscribeStream(`/api/tasks/${r.taskId}/stream`, (d)=>{
+        if(d.status==='done'){ closeSubEdit(); refreshProject().then(()=>{ renderVideos(); toast('字幕已更新'); }); }
+        if(d.status==='error'){ toast('重新生成失败：'+(d.message||'')); }
+      });
+    } else {
+      await refreshProject(); renderVideos(); closeSubEdit(); toast('字幕已更新');
+    }
+  }catch(e){ toast(e.message); }
+}
+
+// ===== 成片编辑器：点成片卡进入（字幕快调 + 二次剪辑）=====
+let curVeVid = null;
+let veRanges = [];   // 保留区间 [{in, out}] 秒
+
+function veOpen(id){
+  const v = (project.videos||[]).find(x=>x.id===id);
+  if(!v) return;
+  curVeVid = id;
+  document.getElementById('ve-title').textContent = '编辑成片 · ' + (v.title||v.version);
+  document.getElementById('ve-meta').textContent =
+    `时长 ${fmtDur(v.duration)} · ${v.width}×${v.height} · ${fmtSize(v.size)}`
+    + (v.cut ? ` · 上次剪辑 ${new Date(v.cut.at).toLocaleString()}` : '');
+  const el = document.getElementById('ve-video');
+  el.src = `/api/projects/${PID}/videos/${id}/file?t=${Date.now()}`;
+  // 字幕快调初值：第一段覆盖 > 项目全局默认
+  const g = project.subtitle||{};
+  const s = ((v.segments||[])[0]||{}).subtitleStyle||{};
+  const sizeEl = document.getElementById('ve-size');
+  const posEl = document.getElementById('ve-pos');
+  sizeEl.value = s.captionSize != null ? s.captionSize : (g.captionSize != null ? g.captionSize : 0.043);
+  posEl.value = s.captionPos != null ? s.captionPos : (g.captionPos != null ? g.captionPos : 0.79);
+  document.getElementById('ve-size-v').textContent = (sizeEl.value*100).toFixed(1)+'%';
+  document.getElementById('ve-pos-v').textContent = Math.round(posEl.value*100)+'%';
+  document.getElementById('ve-color').value = s.captionColor || g.captionColor || '#ffffff';
+  document.getElementById('ve-outline').value = s.captionOutlineColor || g.captionOutlineColor || '#000000';
+  veRanges = (v.cut && Array.isArray(v.cut.pieces)) ? v.cut.pieces.map(p=>({in:Number(p.in)||0, out:Number(p.out)||0})) : [];
+  veRenderRanges();
+  document.getElementById('video-edit-modal').classList.add('show');
+  veBindPreview();
+  // 元数据就绪后开启实时预览（时间轴/尺寸就位）
+  const el2 = document.getElementById('ve-video');
+  if(el2.readyState >= 1) veUpdatePreview();
+  else el2.addEventListener('loadedmetadata', ()=>veUpdatePreview(), { once:true });
+}
+function veClose(){
+  const el = document.getElementById('ve-video');
+  try{ el.pause(); el.removeAttribute('src'); el.load(); }catch(_){}
+  document.getElementById('video-edit-modal').classList.remove('show');
+  document.getElementById('ve-preview').style.display='none';
+  document.getElementById('ve-preview-tip').style.display='none';
+  curVeVid = null; veRanges = [];
+}
+
+// ===== 实时字幕预览：画面上叠一层 WYSIWYG 字幕（样式随控件即时变化，无需重渲） =====
+// 锚点对齐渲染端：ASS Alignment=2 底部居中，MarginV = H*(1-pos) - fontSize*0.6
+//   → 文字块底边 ≈ pos*H + 0.6*fontSize
+let veSubBound = false;
+function veBindPreview(){
+  if(veSubBound) return; veSubBound = true;
+  const el = document.getElementById('ve-video');
+  ['timeupdate','seeked','loadedmetadata','playing'].forEach(ev=>el.addEventListener(ev, veUpdatePreview));
+  window.addEventListener('resize', ()=>{ if(curVeVid) veUpdatePreview(); });
+}
+// 当前播放时刻应显示的字幕文本（按段窗口→素材 ASR cue；无字幕段回退卖点文案）
+function veSubAt(t){
+  const v = (project.videos||[]).find(x=>x.id===curVeVid); if(!v) return '';
+  const segs = v.segments||[];
+  const wins = segTimeWindows(segs);
+  for(let i=0;i<segs.length;i++){
+    if(t < wins[i].start || t >= wins[i].end) continue;
+    const seg = segs[i];
+    const mat = (project.materials||[]).find(m=>m.id===seg.materialId);
+    const cues = (mat && Array.isArray(mat.asrCues)) ? mat.asrCues : [];
+    if(cues.length){
+      const src0 = Number(seg.srcStart)||0, sp = Number(seg.speed)||1;
+      const srcT = src0 + (t - wins[i].start)*sp;           // 输出时刻 → 源片时刻
+      const cue = cues.find(c=> srcT >= (c.start-0.08) && srcT < c.end);
+      if(cue && cue.text) return cue.text;
+    }
+    return seg.sellPoint || '';
+  }
+  return '';
+}
+function veUpdatePreview(){
+  const v = (project.videos||[]).find(x=>x.id===curVeVid); if(!v) return;
+  const box = document.getElementById('ve-video');
+  const pv  = document.getElementById('ve-preview');
+  if(!box.videoWidth || !box.videoHeight){ pv.style.display='none'; return; }
+  // 画面实际显示区域（letterbox 感知）：视频内容在元素内的矩形
+  const rect = box.getBoundingClientRect();
+  const scale = Math.min(rect.width/box.videoWidth, rect.height/box.videoHeight);
+  const cw = box.videoWidth*scale, ch = box.videoHeight*scale;
+  const ox = (rect.width-cw)/2, oy = (rect.height-ch)/2;
+  const sizeRatio = Number(document.getElementById('ve-size').value)||0.043;
+  const pos = Number(document.getElementById('ve-pos').value)||0.79;
+  const color = document.getElementById('ve-color').value || '#ffffff';
+  const outline = document.getElementById('ve-outline').value || '#000000';
+  const fs = Math.max(8, sizeRatio*ch);                    // 预览字号 = 比例 × 画面显示高
+  const o = Math.max(1, fs*0.07);                          // 描边粗细（与渲染端 fontSize*0.075 一致）
+  const text = veSubAt(box.currentTime||0);
+  pv.style.display = text ? 'block' : 'none';
+  document.getElementById('ve-preview-tip').style.display = text ? 'block' : 'none';
+  pv.style.left = (ox + cw*0.04) + 'px';
+  pv.style.width = (cw*0.92) + 'px';
+  // 文字块底边贴在 pos 位置（与 ASS MarginV 语义一致）
+  pv.style.top = (oy + pos*ch + fs*0.6) + 'px';
+  pv.style.transform = 'translateY(-100%)';
+  pv.style.fontSize = fs + 'px';
+  pv.style.color = color;
+  pv.style.textShadow = `-${o}px 0 ${outline},${o}px 0 ${outline},0 -${o}px ${outline},0 ${o}px ${outline},-${o}px -${o}px ${outline},${o}px -${o}px ${outline},-${o}px ${o}px ${outline},${o}px ${o}px ${outline}`;
+  pv.textContent = text;
+}
+// 字幕快调：把同一样式写进每一段，single 重渲（逐段精调用「逐段精调」按钮）
+function veApplySubtitle(){
+  const v = (project.videos||[]).find(x=>x.id===curVeVid);
+  if(!v || !(v.segments||[]).length){ toast('这条成片没有分段信息（旧任务生成），重新生成一次即可编辑字幕'); return; }
+  if(v.cut && !confirm('注意：这条已做过二次剪辑，重新生成会恢复成未剪辑的完整版。\n建议顺序：先重渲字幕，再做剪辑。继续？')) return;
+  const style = {
+    captionSize: Number(document.getElementById('ve-size').value),
+    captionPos: Number(document.getElementById('ve-pos').value),
+    captionColor: document.getElementById('ve-color').value,
+    captionOutlineColor: document.getElementById('ve-outline').value,
+  };
+  const merged = v.segments.map(s=>Object.assign({}, s, { subtitleStyle: Object.assign({}, s.subtitleStyle||{}, style) }));
+  toast('正在按新字幕样式重新生成…');
+  API.post('/api/projects/'+PID+'/render', { single: v.version, videoId: v.id, overrides: { segments: merged } }).then(r=>{
+    if(r && r.taskId){
+      subscribeStream(`/api/tasks/${r.taskId}/stream`, (d)=>{
+        if(d.status==='done'){ refreshProject().then(()=>{ renderVideos(); veOpen(v.id); toast('字幕已更新'); }); }
+        if(d.status==='error'){ toast('重新生成失败：'+(d.message||'')); }
+      });
+    } else { refreshProject().then(()=>{ renderVideos(); veOpen(v.id); toast('字幕已更新'); }); }
+  }).catch(e=>toast(e.message));
+}
+function veOpenSubEdit(){
+  const id = curVeVid; if(!id) return;
+  veClose(); openSubEdit(id);
+}
+// —— 二次剪辑：保留区间 ——
+function veRenderRanges(){
+  const wrap = document.getElementById('ve-ranges');
+  const v = (project.videos||[]).find(x=>x.id===curVeVid);
+  const dur = (v && v.duration) || 0;
+  if(!veRanges.length){
+    wrap.innerHTML = '<span class="muted" style="font-size:12px">还没有保留区间（默认整条保留）。点「＋ 添加保留区间」，或播放到想留的位置用「设起点 / 设终点」。</span>';
+    return;
+  }
+  wrap.innerHTML = veRanges.map((r,i)=>`
+    <div class="row" style="gap:6px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:6px 8px">
+      <span class="muted" style="font-size:12px">#${i+1}</span>
+      <input type="number" step="0.1" min="0" max="${dur}" value="${r.in}" data-i="${i}" data-k="in" style="width:76px" onchange="veRangeChange(this)"> s
+      <span class="muted">→</span>
+      <input type="number" step="0.1" min="0" max="${dur}" value="${r.out}" data-i="${i}" data-k="out" style="width:76px" onchange="veRangeChange(this)"> s
+      <button class="btn btn-sm btn-danger" onclick="veDelRange(${i})">删</button>
+    </div>`).join('');
+}
+function veRangeChange(el){ const i=+el.dataset.i, k=el.dataset.k; if(veRanges[i]) veRanges[i][k]=Number(el.value)||0; }
+function veAddRange(){
+  const v=(project.videos||[]).find(x=>x.id===curVeVid); const dur=(v&&v.duration)||10;
+  let start = veRanges.length ? veRanges[veRanges.length-1].out : 0;
+  let end = Math.min(dur, start + 3);
+  if(end - start < 0.2){ start = Math.max(0, dur - 3); end = dur; }
+  veRanges.push({ in: +start.toFixed(2), out: +end.toFixed(2) });
+  veRenderRanges();
+}
+function veDelRange(i){ veRanges.splice(i,1); veRenderRanges(); }
+function veMarkStart(){
+  const t = +(document.getElementById('ve-video').currentTime||0).toFixed(2);
+  const v = (project.videos||[]).find(x=>x.id===curVeVid);
+  if(!veRanges.length) veRanges.push({ in: t, out: +((v&&v.duration)||t+3).toFixed(2) });
+  else { const last = veRanges[veRanges.length-1]; last.in = t; if(last.out <= last.in) last.out = +(last.in+1).toFixed(2); }
+  veRenderRanges();
+}
+function veMarkEnd(){
+  const t = +(document.getElementById('ve-video').currentTime||0).toFixed(2);
+  if(!veRanges.length) veRanges.push({ in: 0, out: t });
+  else veRanges[veRanges.length-1].out = t;
+  veRenderRanges();
+}
+async function veApplyCut(){
+  const v = (project.videos||[]).find(x=>x.id===curVeVid);
+  if(!v) return;
+  const ranges = veRanges.filter(r=>r.out-r.in>0.15).sort((a,b)=>a.in-b.in);
+  if(!ranges.length){ toast('先添加至少一个保留区间'); return; }
+  if(ranges.length===1 && Math.abs(ranges[0].in)<0.05 && Math.abs(ranges[ranges.length-1].out-(v.duration||0))<0.05){
+    toast('保留区间就是全片，无需剪辑'); return;
+  }
+  const kept = ranges.reduce((a,r)=>a+(r.out-r.in),0);
+  if(!confirm(`将保留 ${ranges.length} 段共约 ${kept.toFixed(1)} 秒（原片 ${fmtDur(v.duration)}），其余剪掉。\n原片自动备份为 .bak，可放心反复剪。确认执行？`)) return;
+  const btn = document.getElementById('ve-cut-btn');
+  btn.disabled = true; const oldTxt = btn.textContent; btn.textContent = '剪辑中…';
+  try{
+    const saved = await API.post(`/api/projects/${PID}/videos/${v.id}/cut`, { pieces: ranges });
+    await refreshProject(); renderVideos();
+    toast('二次剪辑完成：新时长 ' + fmtDur(saved.duration));
+    veOpen(v.id);   // 重载新文件与元数据
+  }catch(e){ toast('剪辑失败：' + (e.message||e)); }
+  finally{ btn.disabled=false; btn.textContent=oldTxt; }
+}
+
+
+// ===== 素材库 =====
+async function loadLibProjects(){
+  const ps=await API.get('/api/projects'); const sel=document.getElementById('lib-proj');
+  sel.innerHTML='<option value="">全部项目</option>'+ps.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
+}
+async function renderLibrary(){
+  let items=[]; try{ items=await API.get('/api/library'); }catch(e){ toast(e.message); return; }
+  const q=document.getElementById('lib-search').value.trim();
+  const cat=document.getElementById('lib-cat').value; const proj=document.getElementById('lib-proj').value;
+  items=items.filter(it=>(!q||(it.projectName+it.originalName).includes(q))&&(!cat||it.category===cat)&&(!proj||it.projectId===proj));
+  document.getElementById('lib-grid').innerHTML=items.map(it=>`
+    <div class="mat-card">
+      <div class="media"><img src="/api/projects/${it.projectId}/materials/${it.materialId}/thumb" onerror="this.style.display='none'"></div>
+      <div class="body"><div class="title">${esc(it.originalName)}</div>
+      <div class="tags">${esc(it.projectName)} · ${esc(it.category)}</div>
+      <div class="tag-row">${it.needsConfirm?'<span class="chip warn">需确认</span>':''}${it.forbidden?'<span class="chip bad">已禁用</span>':''}</div></div>
+    </div>`).join('') || '<div class="empty">没有匹配的素材</div>';
+}
+
+// ===== 项目删除 =====
+async function delProject(){ try{ await API.del('/api/projects/'+PID); location.href='/index.html'; }catch(e){ toast(e.message); } }
+
+// SSE：素材分析 + 美颜/识别进度实时更新
+subscribeStream(`/api/projects/${PID}/stream`, d=>{
+  if(d.type==='material' && d.material){ const i=(project.materials||[]).findIndex(m=>m.id===d.material.id); if(i>=0)project.materials[i]=d.material; else if(project.materials)project.materials.push(d.material); buildMatMap(); renderMatMini(); renderInspect(); }
+  if(d.type==='beauty') onBeautyEvent(d);
+  if(d.type==='asr') onAsrEvent(d);
+});
+
+
+bootAuth().then(ok => {
+  if (!ok) return;
+  loadProject().then(()=>{
+    // 支持 /project.html?id=xxx&tab=results|render 等直达标签页
+    const q = new URLSearchParams(location.search);
+    const t = q.get('tab');
+    if (t && document.getElementById('tab-' + t)) switchTab(t);
+    // 支持 /index.html 项目卡片「编辑」按钮直达：?edit=1 自动打开编辑弹窗
+    if (q.get('edit') === '1') openEditModal();
+  }).catch(e=>toast(e.message));
+});
+</script>
+</body>
+</html>
